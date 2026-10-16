@@ -1,0 +1,22 @@
+
+# Dependencies
+node_modules/
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+apps/api/.env
+apps/api/.env.*
+
+# Build output
+dist/
+apps/api/dist/
+
+# Generated Prisma client
+apps/api/src/generated/
+
+# Local AI/editor tool files
+apps/api/.agents/
+apps/api/.claude/
+apps/api/.windsurf/
