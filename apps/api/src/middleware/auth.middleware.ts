@@ -1,15 +1,22 @@
 
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
+import prisma from "../lib/prisma";
+
+export type UserRole =
+  | "VICE_CHANCELLOR"
+  | "HOD"
+  | "FACULTY"
+  | "STUDENT";
 
 export interface AuthenticatedRequest extends Request {
   user?: {
     userId: string;
-    role: "VICE_CHANCELLOR" | "HOD" | "FACULTY" | "STUDENT";
+    role: UserRole;
   };
 }
 
-export function authenticateToken(
+export async function authenticateToken(
   req: AuthenticatedRequest,
   res: Response,
   next: NextFunction
@@ -22,7 +29,7 @@ export function authenticateToken(
     });
   }
 
-  const token = authHeader.split(" ")[1];
+  const token = authHeader.slice("Bearer ".length).trim();
   const jwtSecret = process.env.JWT_SECRET;
 
   if (!jwtSecret) {
@@ -39,28 +46,48 @@ export function authenticateToken(
     if (
       typeof decoded === "string" ||
       typeof decoded.userId !== "string" ||
-      !["VICE_CHANCELLOR", "HOD", "FACULTY", "STUDENT"].includes(
-        String(decoded.role)
-      )
+      !decoded.userId
     ) {
       return res.status(401).json({
         message: "Invalid authentication token",
       });
     }
 
+    // Fetch the user's current role from PostgreSQL.
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.userId },
+      select: {
+        id: true,
+        role: true,
+      },
+    });
+
+    if (!user) {
+      return res.status(401).json({
+        message: "User no longer exists",
+      });
+    }
+
     req.user = {
-      userId: decoded.userId,
-      role: decoded.role as
-  | "VICE_CHANCELLOR"
-  | "HOD"
-  | "FACULTY"
-  | "STUDENT",
+      userId: user.id,
+      role: user.role as UserRole,
     };
 
-    next();
-  } catch {
-    return res.status(401).json({
-      message: "Invalid or expired authentication token",
+    return next();
+  } catch (error) {
+    // Database failures must not be mistaken for invalid tokens.
+    if (error instanceof jwt.JsonWebTokenError ||
+        error instanceof jwt.TokenExpiredError ||
+        error instanceof jwt.NotBeforeError) {
+      return res.status(401).json({
+        message: "Invalid or expired authentication token",
+      });
+    }
+
+    console.error("Authentication error:", error);
+
+    return res.status(500).json({
+      message: "Authentication could not be completed",
     });
   }
 }
