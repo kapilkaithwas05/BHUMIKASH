@@ -1,45 +1,75 @@
-
-import labRoutes from "./labs/lab.routes";
-import { authorizeRoles } from "./middleware/role.middleware";
-import { AuthenticatedRequest, authenticateToken } from "./middleware/auth.middleware";
-import prisma from "./lib/prisma";
 import express from "express";
 import cors from "cors";
+import multer from "multer";
+
+import prisma from "./lib/prisma";
 import authRoutes from "./auth/auth.routes";
+import labRoutes from "./labs/lab.routes";
+import questionRoutes from "./questions/question.routes";
+import submissionRoutes from "./submissions/submission.routes";
+import examinationRoutes from "./examinations/examination.routes";
+import analyticsRoutes from "./analytics/analytics.routes";
+import amsRoutes from "./ams/ams.routes";
+
+import { authenticateToken, AuthenticatedRequest } from "./middleware/auth.middleware";
+import { authorizeRoles } from "./middleware/role.middleware";
 
 const app = express();
 
-app.use(cors());
-app.use(express.json());
+app.use(cors({
+  origin: true,
+  credentials: true,
+}));
+app.use(express.json({ limit: "5mb" }));
 
+// Route handlers
 app.use("/api/auth", authRoutes);
-
 app.use("/api/labs", labRoutes);
 
+// Questions (both scoped under /api/labs/:labId/questions and top-level /api/questions)
+app.use("/api/labs/:labId/questions", questionRoutes);
+app.use("/api/questions", questionRoutes);
+
+// Submissions (run & submit endpoints)
+app.use("/api/questions", submissionRoutes);
+
+// Examinations
+app.use("/api/labs/:labId/examinations", examinationRoutes);
+app.use("/api/examinations", examinationRoutes);
+
+// Analytics & Reports
+app.use("/api/analytics", analyticsRoutes);
+
+// AMS Integration
+app.use("/api/ams", amsRoutes);
+
+// Health check endpoints
 app.get("/", (_req, res) => {
   res.json({
-    message: "Welcome to LabNEXUS API!"
+    name: "LabNEXUS API",
+    version: "1.0.0",
+    status: "ONLINE",
+    message: "Welcome to LabNEXUS — Integrated University Laboratory Assessment Portal",
   });
 });
 
 app.get("/api/health", (_req, res) => {
   res.status(200).json({
     status: "OK",
-    message: "LabNEXUS backend is running"
+    service: "LabNEXUS backend",
+    timestamp: new Date().toISOString(),
   });
 });
 
 app.get("/api/health/db", async (_req, res) => {
   try {
     await prisma.$queryRaw`SELECT 1`;
-
     res.status(200).json({
       status: "OK",
       database: "connected",
     });
   } catch (error) {
     console.error("Database health check failed:", error);
-
     res.status(500).json({
       status: "ERROR",
       database: "disconnected",
@@ -50,36 +80,43 @@ app.get("/api/health/db", async (_req, res) => {
 app.get(
   "/api/auth/me",
   authenticateToken,
-  (req: AuthenticatedRequest, res) => {
-    res.json({
-      message: "Authentication successful",
-      user: req.user,
-    });
+  async (req: AuthenticatedRequest, res) => {
+    try {
+      const user = await prisma.user.findUnique({
+        where: { id: req.user!.userId },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          rollNumber: true,
+          department: {
+            select: { id: true, name: true, code: true },
+          },
+        },
+      });
+
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      res.json({
+        message: "Authentication successful",
+        user,
+      });
+    } catch (error) {
+      res.status(500).json({ message: "Could not fetch user profile" });
+    }
   }
 );
 
-app.get(
-  "/api/auth/faculty-test",
-  authenticateToken,
-  authorizeRoles("FACULTY", "HOD"),
-  (_req, res) => {
-    res.json({
-      message: "Access granted",
-      allowedRoles: ["FACULTY", "HOD"],
-    });
-  }
-);
-
-
-import multer from "multer";
-
-// Handle file-upload errors
+// File-upload error handling
 app.use(
   (
     error: Error,
-    _req: import("express").Request,
-    res: import("express").Response,
-    next: import("express").NextFunction
+    _req: express.Request,
+    res: express.Response,
+    next: express.NextFunction
   ) => {
     if (error instanceof multer.MulterError) {
       if (error.code === "LIMIT_FILE_SIZE") {

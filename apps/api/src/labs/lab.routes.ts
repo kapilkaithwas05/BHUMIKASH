@@ -1,24 +1,25 @@
-
+import crypto from "crypto";
 import { uploadStudentList } from "../middleware/upload.middleware";
 import { parseStudentList } from "./student-list.parser";
-import { Router, Request, Response } from "express";
+import { Router, Response } from "express";
 import prisma from "../lib/prisma";
 import {
   authenticateToken,
   AuthenticatedRequest,
 } from "../middleware/auth.middleware";
 import { authorizeRoles } from "../middleware/role.middleware";
+import { getParam } from "../lib/params";
 
 const router = Router();
 
-// POST /api/labs
+// POST /api/labs - Create lab
 router.post(
   "/",
   authenticateToken,
-  authorizeRoles("FACULTY", "HOD"),
+  authorizeRoles("FACULTY", "HOD", "VICE_CHANCELLOR"),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
-      const { title, description, language } = req.body;
+      const { title, code, description, language, departmentId } = req.body;
 
       if (typeof title !== "string" || !title.trim()) {
         return res.status(400).json({
@@ -37,24 +38,21 @@ router.post(
         });
       }
 
-      if (
-        description !== undefined &&
-        description !== null &&
-        typeof description !== "string"
-      ) {
-        return res.status(400).json({
-          message: "Description must be a string",
-        });
-      }
+      // Generate a default unique enrollment key
+      const generatedKey = (code ? code.toUpperCase().replace(/\s+/g, "-") + "-" : "LAB-") +
+        crypto.randomBytes(3).toString("hex").toUpperCase();
 
       const lab = await prisma.lab.create({
         data: {
           title: title.trim(),
+          code: code && typeof code === "string" ? code.trim() : null,
           description:
             typeof description === "string" && description.trim()
               ? description.trim()
               : null,
           language: language as "C" | "CPP" | "JAVA" | "PYTHON",
+          enrollmentKey: generatedKey,
+          departmentId: departmentId || null,
           createdById: req.user!.userId,
         },
       });
@@ -72,8 +70,7 @@ router.post(
   }
 );
 
-
-/* GET /api/labs */
+// GET /api/labs - List labs
 router.get(
   "/",
   authenticateToken,
@@ -81,13 +78,26 @@ router.get(
     try {
       const { userId, role } = req.user!;
 
+      if (role === "VICE_CHANCELLOR") {
+        const labs = await prisma.lab.findMany({
+          orderBy: { createdAt: "desc" },
+          include: {
+            createdBy: { select: { id: true, name: true, email: true } },
+            department: { select: { id: true, name: true, code: true } },
+            _count: { select: { enrollments: true, questions: true, examinations: true } },
+          },
+        });
+        return res.status(200).json({ labs });
+      }
+
       if (role === "FACULTY" || role === "HOD") {
         const labs = await prisma.lab.findMany({
-          where: {
-            createdById: userId,
-          },
-          orderBy: {
-            createdAt: "desc",
+          where: role === "HOD" ? {} : { createdById: userId },
+          orderBy: { createdAt: "desc" },
+          include: {
+            createdBy: { select: { id: true, name: true, email: true } },
+            department: { select: { id: true, name: true, code: true } },
+            _count: { select: { enrollments: true, questions: true, examinations: true } },
           },
         });
 
@@ -97,6 +107,7 @@ router.get(
       if (role === "STUDENT") {
         const labs = await prisma.lab.findMany({
           where: {
+            isPublished: true,
             enrollments: {
               some: {
                 studentId: userId,
@@ -105,6 +116,11 @@ router.get(
           },
           orderBy: {
             createdAt: "desc",
+          },
+          include: {
+            createdBy: { select: { id: true, name: true } },
+            department: { select: { id: true, name: true, code: true } },
+            _count: { select: { questions: true, examinations: true } },
           },
         });
 
@@ -124,21 +140,195 @@ router.get(
   }
 );
 
+// POST /api/labs/join-by-key - Student joins lab using key
+router.post(
+  "/join-by-key",
+  authenticateToken,
+  authorizeRoles("STUDENT"),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { enrollmentKey } = req.body;
+      const { userId } = req.user!;
 
-/* POST /api/labs/:labId/enroll */
+      if (!enrollmentKey || typeof enrollmentKey !== "string" || !enrollmentKey.trim()) {
+        return res.status(400).json({ message: "Enrollment key is required" });
+      }
+
+      const cleanKey = enrollmentKey.trim().toUpperCase();
+
+      const lab = await prisma.lab.findFirst({
+        where: {
+          enrollmentKey: cleanKey,
+          isPublished: true,
+        },
+      });
+
+      if (!lab) {
+        return res.status(404).json({ message: "Invalid or inactive enrollment key" });
+      }
+
+      // Check if already enrolled
+      const existing = await prisma.enrollment.findUnique({
+        where: {
+          studentId_labId: {
+            studentId: userId,
+            labId: lab.id,
+          },
+        },
+      });
+
+      if (existing) {
+        return res.status(409).json({ message: "You are already enrolled in this laboratory" });
+      }
+
+      const enrollment = await prisma.enrollment.create({
+        data: {
+          studentId: userId,
+          labId: lab.id,
+        },
+      });
+
+      return res.status(201).json({
+        message: "Successfully enrolled in " + lab.title,
+        lab,
+        enrollment,
+      });
+    } catch (error) {
+      console.error("Join by key error:", error);
+      return res.status(500).json({ message: "Could not join laboratory" });
+    }
+  }
+);
+
+// GET /api/labs/:labId - Lab detail
+router.get(
+  "/:labId",
+  authenticateToken,
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const labId = getParam(req.params.labId);
+      const { userId, role } = req.user!;
+
+      if (!labId) {
+        return res.status(400).json({ message: "Lab ID is required" });
+      }
+
+      const lab = await prisma.lab.findUnique({
+        where: { id: labId },
+        include: {
+          createdBy: { select: { id: true, name: true, email: true } },
+          department: { select: { id: true, name: true, code: true } },
+          _count: {
+            select: { enrollments: true, questions: true, examinations: true },
+          },
+        },
+      });
+
+      if (!lab) {
+        return res.status(404).json({ message: "Laboratory not found" });
+      }
+
+      if (role === "STUDENT") {
+        const isEnrolled = await prisma.enrollment.findUnique({
+          where: {
+            studentId_labId: {
+              studentId: userId,
+              labId,
+            },
+          },
+        });
+
+        if (!isEnrolled) {
+          return res.status(403).json({ message: "You are not enrolled in this lab" });
+        }
+      }
+
+      return res.status(200).json({ lab });
+    } catch (error) {
+      console.error("Fetch lab detail error:", error);
+      return res.status(500).json({ message: "Could not fetch laboratory details" });
+    }
+  }
+);
+
+// PUT /api/labs/:labId/publish - Publish or unpublish lab
+router.put(
+  "/:labId/publish",
+  authenticateToken,
+  authorizeRoles("FACULTY", "HOD", "VICE_CHANCELLOR"),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const labId = getParam(req.params.labId);
+      const { isPublished } = req.body;
+
+      if (!labId) {
+        return res.status(400).json({ message: "Lab ID is required" });
+      }
+
+      const lab = await prisma.lab.update({
+        where: { id: labId },
+        data: {
+          isPublished: typeof isPublished === "boolean" ? isPublished : true,
+        },
+      });
+
+      return res.status(200).json({
+        message: `Laboratory ${lab.isPublished ? "published" : "unpublished"} successfully`,
+        lab,
+      });
+    } catch (error) {
+      console.error("Publish lab error:", error);
+      return res.status(500).json({ message: "Could not update laboratory publish status" });
+    }
+  }
+);
+
+// POST /api/labs/:labId/enrollment-key - Generate/regenerate enrollment key
+router.post(
+  "/:labId/enrollment-key",
+  authenticateToken,
+  authorizeRoles("FACULTY", "HOD", "VICE_CHANCELLOR"),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const labId = getParam(req.params.labId);
+
+      if (!labId) {
+        return res.status(400).json({ message: "Lab ID is required" });
+      }
+
+      const newKey = "LAB-" + crypto.randomBytes(4).toString("hex").toUpperCase();
+
+      const lab = await prisma.lab.update({
+        where: { id: labId },
+        data: { enrollmentKey: newKey },
+        select: { id: true, title: true, enrollmentKey: true },
+      });
+
+      return res.status(200).json({
+        message: "Enrollment key generated successfully",
+        enrollmentKey: lab.enrollmentKey,
+      });
+    } catch (error) {
+      console.error("Generate enrollment key error:", error);
+      return res.status(500).json({ message: "Could not generate enrollment key" });
+    }
+  }
+);
+
+// POST /api/labs/:labId/enroll - Single student enrollment by email
 router.post(
   "/:labId/enroll",
   authenticateToken,
-  authorizeRoles("FACULTY", "HOD"),
+  authorizeRoles("FACULTY", "HOD", "VICE_CHANCELLOR"),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
-      const labId = req.params.labId;
+      const labId = getParam(req.params.labId);
 
-      if (typeof labId !== "string" || !labId.trim()) {
+      if (!labId) {
         return res.status(400).json({
-            message: "Invalid lab ID",
-            });
-        }
+          message: "Invalid lab ID",
+        });
+      }
       const { email } = req.body;
 
       if (typeof email !== "string" || !email.trim()) {
@@ -147,11 +337,10 @@ router.post(
         });
       }
 
-      // Confirm that the lab exists and belongs to this faculty member.
       const lab = await prisma.lab.findFirst({
         where: {
           id: labId,
-          createdById: req.user!.userId,
+          ...(req.user!.role === "FACULTY" ? { createdById: req.user!.userId } : {}),
         },
       });
 
@@ -161,7 +350,6 @@ router.post(
         });
       }
 
-      // Find the student using their registered email.
       const student = await prisma.user.findUnique({
         where: {
           email: email.trim().toLowerCase(),
@@ -170,11 +358,10 @@ router.post(
 
       if (!student || student.role !== "STUDENT") {
         return res.status(404).json({
-          message: "Student not found",
+          message: "Student not found with this email",
         });
       }
 
-      // Prevent duplicate enrollment.
       const existingEnrollment = await prisma.enrollment.findUnique({
         where: {
           studentId_labId: {
@@ -209,7 +396,6 @@ router.post(
       });
     } catch (error) {
       console.error("Student enrollment error:", error);
-
       return res.status(500).json({
         message: "Could not enroll student",
       });
@@ -217,27 +403,27 @@ router.post(
   }
 );
 
-
-/* GET /api/labs/:labId/students */
+// GET /api/labs/:labId/students - List enrolled students
 router.get(
   "/:labId/students",
   authenticateToken,
-  authorizeRoles("FACULTY", "HOD"),
+  authorizeRoles("FACULTY", "HOD", "VICE_CHANCELLOR"),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
-      const labId = req.params.labId;
+      const labId = getParam(req.params.labId);
 
-      if (typeof labId !== "string" || !labId.trim()) {
+      if (!labId) {
         return res.status(400).json({
           message: "Invalid lab ID",
         });
       }
 
-      // Only the faculty member who created the lab can view its students.
+      const { userId, role } = req.user!;
+
       const lab = await prisma.lab.findFirst({
         where: {
           id: labId,
-          createdById: req.user!.userId,
+          ...(role === "FACULTY" ? { createdById: userId } : {}),
         },
         select: {
           id: true,
@@ -266,6 +452,7 @@ router.get(
               id: true,
               name: true,
               email: true,
+              rollNumber: true,
             },
           },
         },
@@ -282,7 +469,6 @@ router.get(
       });
     } catch (error) {
       console.error("Fetch enrolled students error:", error);
-
       return res.status(500).json({
         message: "Could not fetch enrolled students",
       });
@@ -290,36 +476,24 @@ router.get(
   }
 );
 
-
-/* DELETE /api/labs/:labId/students/:studentId */
+// DELETE /api/labs/:labId/students/:studentId - Remove student from lab
 router.delete(
   "/:labId/students/:studentId",
   authenticateToken,
-  authorizeRoles("FACULTY", "HOD"),
+  authorizeRoles("FACULTY", "HOD", "VICE_CHANCELLOR"),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
-      const { labId, studentId } = req.params;
+      const labId = getParam(req.params.labId);
+      const studentId = getParam(req.params.studentId);
 
-      if (
-        typeof labId !== "string" ||
-        !labId.trim() ||
-        typeof studentId !== "string" ||
-        !studentId.trim()
-      ) {
-        return res.status(400).json({
-          message: "Invalid lab ID or student ID",
-        });
+      if (!labId || !studentId) {
+        return res.status(400).json({ message: "Invalid lab ID or student ID" });
       }
 
-      // Verify that this faculty member owns the lab.
       const lab = await prisma.lab.findFirst({
         where: {
           id: labId,
-          createdById: req.user!.userId,
-        },
-        select: {
-          id: true,
-          title: true,
+          ...(req.user!.role === "FACULTY" ? { createdById: req.user!.userId } : {}),
         },
       });
 
@@ -329,7 +503,6 @@ router.delete(
         });
       }
 
-      // Find the student's enrollment in this lab.
       const enrollment = await prisma.enrollment.findUnique({
         where: {
           studentId_labId: {
@@ -361,7 +534,6 @@ router.delete(
       });
     } catch (error) {
       console.error("Remove student error:", error);
-
       return res.status(500).json({
         message: "Could not remove student from lab",
       });
@@ -369,21 +541,18 @@ router.delete(
   }
 );
 
-
-/* POST /api/labs/:labId/enroll/bulk */
+// POST /api/labs/:labId/enroll/bulk - Bulk student roster upload
 router.post(
   "/:labId/enroll/bulk",
   authenticateToken,
-  authorizeRoles("FACULTY", "HOD"),
+  authorizeRoles("FACULTY", "HOD", "VICE_CHANCELLOR"),
   uploadStudentList.single("file"),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
-      const labId = req.params.labId;
+      const labId = getParam(req.params.labId);
 
-      if (typeof labId !== "string" || !labId.trim()) {
-        return res.status(400).json({
-          message: "Invalid lab ID",
-        });
+      if (!labId) {
+        return res.status(400).json({ message: "Lab ID is required" });
       }
 
       if (!req.file) {
@@ -392,11 +561,10 @@ router.post(
         });
       }
 
-      // Verify that this faculty member owns the lab.
       const lab = await prisma.lab.findFirst({
         where: {
           id: labId,
-          createdById: req.user!.userId,
+          ...(req.user!.role === "FACULTY" ? { createdById: req.user!.userId } : {}),
         },
         select: {
           id: true,
@@ -417,8 +585,8 @@ router.post(
 
       if (parsed.emails.length === 0) {
         return res.status(400).json({
-            message: "The file contains no valid student email addresses.",
-            invalidRows: parsed.invalidRows,
+          message: "The file contains no valid student email addresses.",
+          invalidRows: parsed.invalidRows,
         });
       }
 
@@ -469,7 +637,6 @@ router.post(
       });
     } catch (error) {
       console.error("Bulk enrollment error:", error);
-
       return res.status(500).json({
         message: "Could not process bulk enrollment",
       });

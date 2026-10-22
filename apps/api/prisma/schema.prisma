@@ -1,8 +1,6 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
   provider = "prisma-client"
   output   = "../src/generated/prisma"
@@ -19,18 +17,6 @@ enum Role {
   STUDENT
 }
 
-model User {
-  id           String   @id @default(cuid())
-  name         String
-  email        String   @unique
-  passwordHash String
-  role         Role     @default(STUDENT)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  createdLabs     Lab[]        @relation("LabCreator")
-  labEnrollments  Enrollment[] @relation("StudentEnrollments")
-}
-
 enum LabLanguage {
   C
   CPP
@@ -38,32 +24,200 @@ enum LabLanguage {
   PYTHON
 }
 
+enum SubmissionStatus {
+  PENDING
+  RUNNING
+  ACCEPTED
+  WRONG_ANSWER
+  COMPILATION_ERROR
+  RUNTIME_ERROR
+  TIME_LIMIT_EXCEEDED
+  MEMORY_LIMIT_EXCEEDED
+  INTERNAL_ERROR
+}
+
+model Department {
+  id          String   @id @default(cuid())
+  name        String
+  code        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users       User[]
+  labs        Lab[]
+}
+
+model User {
+  id             String       @id @default(cuid())
+  name           String
+  email          String       @unique
+  passwordHash   String
+  role           Role         @default(STUDENT)
+  rollNumber     String?
+  departmentId   String?
+  department     Department?  @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  createdLabs    Lab[]        @relation("LabCreator")
+  labEnrollments Enrollment[] @relation("StudentEnrollments")
+  submissions    Submission[]
+  auditLogs      AuditLog[]
+}
+
 model Lab {
-  id              String      @id @default(cuid())
-  title           String
-  description     String?
-  language        LabLanguage
-  enrollmentKey   String?     @unique
-  isPublished     Boolean     @default(false)
+  id            String       @id @default(cuid())
+  title         String
+  code          String?
+  description   String?
+  language      LabLanguage
+  enrollmentKey String?      @unique
+  isPublished   Boolean      @default(false)
 
-  createdById     String
-  createdBy       User        @relation("LabCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  departmentId  String?
+  department    Department?  @relation(fields: [departmentId], references: [id], onDelete: SetNull)
 
-  enrollments     Enrollment[]
+  createdById   String
+  createdBy     User         @relation("LabCreator", fields: [createdById], references: [id], onDelete: Restrict)
 
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+  enrollments   Enrollment[]
+  questions     Question[]
+  examinations  Examination[]
+  submissions   Submission[]
+
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
 }
 
 model Enrollment {
-  id          String   @id @default(cuid())
-  studentId   String
-  labId       String
+  id         String   @id @default(cuid())
+  studentId  String
+  labId      String
 
-  student     User     @relation("StudentEnrollments", fields: [studentId], references: [id], onDelete: Cascade)
-  lab         Lab      @relation(fields: [labId], references: [id], onDelete: Cascade)
+  student    User     @relation("StudentEnrollments", fields: [studentId], references: [id], onDelete: Cascade)
+  lab        Lab      @relation(fields: [labId], references: [id], onDelete: Cascade)
 
-  enrolledAt  DateTime @default(now())
+  enrolledAt DateTime @default(now())
 
   @@unique([studentId, labId])
+}
+
+model Question {
+  id                   String                @id @default(cuid())
+  labId                String
+  lab                  Lab                   @relation(fields: [labId], references: [id], onDelete: Cascade)
+  title                String
+  description          String
+  inputFormat          String?
+  outputFormat         String?
+  constraints          String?
+  difficulty           String                @default("MEDIUM")
+  marks                Int                   @default(10)
+  timeLimitMs          Int                   @default(2000)
+  memoryLimitMb        Int                   @default(128)
+  starterCode          String?
+  orderIndex           Int                   @default(0)
+
+  testCases            TestCase[]
+  submissions          Submission[]
+  examinationQuestions ExaminationQuestion[]
+
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+}
+
+model TestCase {
+  id             String                 @id @default(cuid())
+  questionId     String
+  question       Question               @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  input          String
+  expectedOutput String
+  isHidden       Boolean                @default(false)
+  explanation    String?
+  orderIndex     Int                    @default(0)
+
+  results        SubmissionTestResult[]
+}
+
+model Examination {
+  id               String                @id @default(cuid())
+  labId            String
+  lab              Lab                   @relation(fields: [labId], references: [id], onDelete: Cascade)
+  title            String
+  description      String?
+  startTime        DateTime
+  endTime          DateTime
+  durationMinutes  Int                   @default(60)
+  totalMarks       Int                   @default(100)
+  isPublished      Boolean               @default(false)
+  disableCopyPaste Boolean               @default(false)
+
+  questions        ExaminationQuestion[]
+  submissions      Submission[]
+
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+}
+
+model ExaminationQuestion {
+  id            String      @id @default(cuid())
+  examinationId String
+  questionId    String
+  orderIndex    Int         @default(0)
+
+  examination   Examination @relation(fields: [examinationId], references: [id], onDelete: Cascade)
+  question      Question    @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([examinationId, questionId])
+}
+
+model Submission {
+  id             String                 @id @default(cuid())
+  studentId      String
+  student        User                   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  labId          String
+  lab            Lab                    @relation(fields: [labId], references: [id], onDelete: Cascade)
+  questionId     String
+  question       Question               @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  examinationId  String?
+  examination    Examination?           @relation(fields: [examinationId], references: [id], onDelete: SetNull)
+
+  language       LabLanguage
+  sourceCode     String
+  status         SubmissionStatus       @default(PENDING)
+  compileOutput  String?
+  score          Float                  @default(0)
+  totalTests     Int                    @default(0)
+  passedTests    Int                    @default(0)
+  executionTimeMs Int?
+
+  testResults    SubmissionTestResult[]
+
+  submittedAt    DateTime               @default(now())
+}
+
+model SubmissionTestResult {
+  id              String           @id @default(cuid())
+  submissionId    String
+  submission      Submission       @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  testCaseId      String
+  testCase        TestCase         @relation(fields: [testCaseId], references: [id], onDelete: Cascade)
+
+  passed          Boolean
+  status          SubmissionStatus
+  actualOutput    String?
+  executionTimeMs Int?
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action    String
+  entity    String
+  entityId  String?
+  details   String?
+  ipAddress String?
+  createdAt DateTime @default(now())
 }

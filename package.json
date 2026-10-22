@@ -1,4 +1,16 @@
 {
+  "name": "labnexus-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev:api": "npm run dev --prefix apps/api",
+    "dev:web": "npm run dev --prefix apps/web",
+    "build:api": "npm run build --prefix apps/api",
+    "build:web": "npm run build --prefix apps/web",
+    "build": "npm run build:api && npm run build:web",
+    "seed": "npm run seed --prefix apps/api",
+    "test:exec": "npx tsx apps/api/scripts/verify-execution.ts"
+  },
   "dependencies": {
     "cors": "^2.8.6",
     "dotenv": "^18.0.8",

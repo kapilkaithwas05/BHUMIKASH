@@ -1,467 +1,237 @@
-
 <div align="center">
 
 # 🧪 LabNEXUS
 
-### A Unified Digital Platform for University Coding Labs
+### An Integrated University Laboratory Submission and Assessment Portal
 
-**Code. Submit. Evaluate. Improve.**
+**Code. Compile. Submit. Evaluate.**
 
-A centralized coding lab management platform designed to simplify programming assignments, streamline submissions, and support efficient academic evaluation.
-
-<br/>
-
-![Project Status](https://img.shields.io/badge/Project-In_Development-orange?style=for-the-badge)
-![Domain](https://img.shields.io/badge/Domain-EdTech-blue?style=for-the-badge)
-![Platform](https://img.shields.io/badge/Platform-Web_Application-6C63FF?style=for-the-badge)
+A modern, full-stack university coding portal designed for computer science curricula, laboratory management, synchronized practical assessments, and automated test-case evaluation.
 
 <br/>
 
-[Features](#-key-features) •
+![Project Status](https://img.shields.io/badge/Status-Fully_Integrated-emerald?style=for-the-badge)
+![Tech Stack](https://img.shields.io/badge/Stack-React_18_+_Node.js_+_PostgreSQL-indigo?style=for-the-badge)
+![Architecture](https://img.shields.io/badge/ORM-Prisma_7-blue?style=for-the-badge)
+![Editor](https://img.shields.io/badge/Editor-Monaco_Code_Editor-violet?style=for-the-badge)
+
+<br/>
+
 [Architecture](#-system-architecture) •
-[Tech Stack](#-technology-stack) •
+[Roles & RBAC](#-user-roles--rbac) •
 [Getting Started](#-getting-started) •
-[Roadmap](#-roadmap)
+[Demo Credentials](#-demo-accounts) •
+[API Documentation](#-api-routes) •
+[Execution Engine](#-code-execution-engine)
 
 </div>
 
 ---
 
-## 📌 Table of Contents
+## 📌 Overview
 
-- [About the Project](#-about-the-project)
-- [Problem Statement](#-problem-statement)
-- [Our Solution](#-our-solution)
-- [Key Features](#-key-features)
-- [User Roles](#-user-roles)
-- [System Architecture](#-system-architecture)
-- [Technology Stack](#-technology-stack)
-- [Project Structure](#-project-structure)
-- [Getting Started](#-getting-started)
-- [How It Works](#-how-it-works)
-- [Security and Reliability](#-security-and-reliability)
-- [Roadmap](#-roadmap)
-- [Future Scope](#-future-scope)
-- [Contributing](#-contributing)
-- [Team](#-team)
-- [License](#-license)
+**LabNEXUS** replaces fragmented spreadsheets, disconnected IDEs, and manual email submissions with an institutional platform tailored to academic computer science laboratories.
 
----
-
-## 📖 About the Project
-
-**LabNEXUS** is a proposed university-focused coding lab management platform that aims to bring programming laboratory activities into a single digital environment.
-
-In many academic environments, theory courses have digital learning and assessment facilities, while programming laboratory submissions may still rely on manual file uploads, disconnected tools, or end-of-semester submission processes.
-
-LabNEXUS aims to bridge this gap by connecting students and faculty through a unified workflow for laboratory assignments, code submissions, evaluation, and progress tracking.
-
-The platform is designed to complement an existing university Academic Management System (AMS), subject to available integration support.
-
-### 🎯 Project Vision
-
-To make university programming laboratories more organized, accessible, transparent, and efficient through digital workflows and automated evaluation.
-
----
-
-## 🚨 Problem Statement
-
-Traditional programming laboratory workflows can introduce several challenges:
-
-- **Fragmented submissions:** Lab assignments and source code may be distributed across different platforms.
-- **Manual evaluation:** Faculty may need to compile, execute, and evaluate submissions individually.
-- **Limited progress visibility:** Students may lack a centralized view of deadlines and submission status.
-- **Administrative overhead:** Faculty must track submissions, marks, and student progress manually.
-- **Academic integrity concerns:** Identifying similar code submissions can be difficult without appropriate tools.
-- **Disconnected systems:** Lab activities may not integrate with existing academic portals.
-
-These challenges create an opportunity for a centralized and extensible coding laboratory platform.
-
----
-
-## 💡 Our Solution
-
-LabNEXUS proposes a structured workflow connecting students, faculty, assignments, submissions, and evaluation.
-
-The platform aims to provide:
-
-- A unified dashboard for laboratory activities.
-- Centralized assignment and deadline management.
-- Timestamped code submissions and submission history.
-- Faculty tools for reviewing submissions and monitoring progress.
-- Automated code execution and grading through a secure execution service.
-- Performance analytics and evaluation feedback.
-- Potential integration with the university's existing AMS.
-
-The implementation of individual capabilities will depend on the project's development stage and available infrastructure.
-
----
-
-## ✨ Key Features
-
-### 👨‍🎓 Student Portal
-
-- **Student Dashboard:** View enrolled lab courses and relevant activities.
-- **Assignment Management:** Access programming tasks, descriptions, and deadlines.
-- **Code Submission:** Submit source code through the platform.
-- **Submission History:** Review previous submissions and timestamps.
-- **Resubmission Support:** Submit updated solutions within permitted deadlines.
-- **Evaluation Results:** View marks, execution results, and faculty feedback when available.
-- **Deadline Tracking:** Keep track of upcoming and completed assignments.
-
-### 👩‍🏫 Faculty Portal
-
-- **Course Management:** Organize programming laboratory courses.
-- **Assignment Creation:** Create and publish programming tasks.
-- **Deadline Configuration:** Define submission deadlines and applicable late policies.
-- **Test Case Management:** Configure input/output test cases for automated evaluation.
-- **Submission Monitoring:** Review student submissions and their status.
-- **Progress Tracking:** Monitor submission completion across a class.
-- **Grade Management:** Record manual or automated evaluation results.
-- **Analytics and Reports:** Generate insights into student performance and submission patterns.
-
-### ⚙️ Coding and Evaluation
-
-- Browser-based code editor with syntax highlighting.
-- Multi-language programming support.
-- Secure compilation and execution of submitted code.
-- Automated evaluation using predefined test cases.
-- Execution time and memory limits.
-- Code similarity analysis to support academic integrity.
-
-> **Implementation note:** Browser-based editing, multi-language execution, automatic grading, and plagiarism detection require their respective components and must be verified before being described as available features.
-
-### 🔐 Platform and Integration
-
-- Role-based access for students and faculty.
-- Secure authentication and session management.
-- Course-specific access control.
-- Integration with university AMS through supported APIs or learning standards.
-- Optional single sign-on using institutional credentials.
-- Synchronization of course enrollment and grades where supported.
-
----
-
-## 👥 User Roles
-
-| Capability | Student | Faculty |
-|---|:---:|:---:|
-| View enrolled lab courses | ✓ | ✓ |
-| View assignments and deadlines | ✓ | ✓ |
-| Submit programming solutions | ✓ | — |
-| View submission history | ✓ | ✓ |
-| Create and publish assignments | — | ✓ |
-| Configure evaluation test cases | — | ✓ |
-| Review submissions | — | ✓ |
-| Manage grades and feedback | View | Manage |
-| Monitor class progress | — | ✓ |
-
-Access to individual capabilities will be governed by role-based permissions.
+The system connects four distinct stakeholders:
+1. **Vice Chancellor / Executive Admin**: University-wide oversight, department comparisons, and audit logging.
+2. **Head of Department (HOD)**: Department-level laboratory monitoring, faculty directory, and exam participation statistics.
+3. **Faculty**: Course authoring, question management (with visible sample and private hidden test cases), manual and bulk student enrollment (CSV/XLSX), practical examination scheduling, and grading exports.
+4. **Students**: Distraction-free Monaco coding workspace with live compilation output, server-synchronized assessment countdown timers, copy/paste deterrents, and instant automated grading.
 
 ---
 
 ## 🏗️ System Architecture
 
-LabNEXUS is intended to use a modular architecture that separates the user interface, application logic, data storage, and code execution environment.
-
-### High-Level Architecture
-
 ```mermaid
 flowchart TD
-    A[Student Portal] --> D[Frontend Application]
-    B[Faculty Portal] --> D
+    subgraph Frontend ["Frontend (apps/web — React 18 + Vite)"]
+        UI[Tailwind Component System]
+        Monaco[Monaco Code Editor]
+        AuthCtx[JWT Auth & Context]
+        Timer[Synchronized Exam Countdown]
+    end
 
-    D --> E[Backend API]
-    E --> F[Authentication and Authorization]
-    E --> G[Assignment and Submission Service]
-    E --> H[(Database)]
+    subgraph Backend ["Backend (apps/api — Express 5 + TypeScript)"]
+        Router[REST API Layer]
+        AuthMid[Auth & Role Verification]
+        EvalSvc[Automated Evaluation Service]
+        ExecSvc[Sandboxed Code Execution Engine]
+        AMS[University AMS Gateway Adapter]
+    end
 
-    G --> I[Execution Queue]
-    I --> J[Isolated Code Execution Workers]
-    J --> K[Compiler and Test Runner]
-    K --> L[Evaluation Results]
-    L --> H
+    subgraph Database ["Data & Storage Layer"]
+        Prisma[Prisma ORM 7]
+        Postgres[(PostgreSQL Database)]
+    end
 
-    E -. Optional Integration .-> M[University AMS]
+    UI --> Router
+    Monaco --> Router
+    Router --> AuthMid
+    AuthMid --> Prisma
+    Router --> EvalSvc
+    EvalSvc --> ExecSvc
+    Prisma --> Postgres
+    Router --> AMS
 ```
-
-### Code Execution Workflow
-
-```mermaid
-flowchart LR
-    A[Student Submits Code] --> B[Validate Submission]
-    B --> C[Queue Execution Job]
-    C --> D[Isolated Execution Environment]
-    D --> E[Compile and Run]
-    E --> F[Evaluate Test Cases]
-    F --> G[Store Results]
-    G --> H[Display Feedback]
-```
-
-The execution architecture is a proposed design. Submitted code must run in an isolated environment rather than directly on the main application server.
 
 ---
 
-## 🛠️ Technology Stack
+## 👥 User Roles & RBAC
 
-The final stack should match the technologies actually selected and implemented by the development team.
-
-### Proposed Technology Options
-
-| Layer | Candidate Technologies | Purpose |
-|---|---|---|
-| Frontend | React.js / Next.js | Responsive user interface |
-| Backend | Node.js + Express.js / Django | APIs and business logic |
-| Database | PostgreSQL | Users, courses, assignments, and submissions |
-| Code Execution | Docker | Isolated program execution |
-| Job Queue | Redis / RabbitMQ | Asynchronous execution jobs |
-| File Storage | MinIO / AWS S3 | Source files and submission artifacts |
-| Authentication | JWT and institutional SSO | Identity and access management |
-| Web Server | Nginx | Reverse proxy and request routing |
-| Version Control | Git and GitHub | Source code management |
-
-**Important:** These are candidate technologies from the proposed architecture, not a declaration of the project's current implementation. Update this section once the actual stack is finalized.
+| Capability | Vice Chancellor | Head of Dept (HOD) | Faculty | Student |
+|---|:---:|:---:|:---:|:---:|
+| Institution Overview & Comparisons | ✓ | — | — | — |
+| Audit Trail Inspection | ✓ | — | — | — |
+| Department Oversight & Faculty Directory | ✓ | ✓ | — | — |
+| Create & Manage Laboratories | — | ✓ | ✓ | — |
+| Author Questions & Hidden Test Cases | — | ✓ | ✓ | — |
+| Single & Bulk Student Enrollment | — | ✓ | ✓ | — |
+| Schedule & Publish Examinations | — | ✓ | ✓ | — |
+| View All Student Submissions & Scores | ✓ | ✓ | ✓ | — |
+| Export Assessment Results (CSV) | ✓ | ✓ | ✓ | — |
+| Join Laboratory via Enrollment Key | — | — | — | ✓ |
+| Monaco Editor Coding & Run Practice | — | — | — | ✓ |
+| Submit Code for Automated Evaluation | — | — | — | ✓ |
+| Timed Assessment Participation | — | — | — | ✓ |
 
 ---
 
-## 📂 Project Structure
+## 🔑 Demo Accounts
 
-The following is an illustrative structure for a modular full-stack implementation. Adapt it to match the actual repository.
+The project includes an institutional seed script pre-populating departments, faculty, students, sample labs, questions, and an ongoing examination:
 
-```text
-LabNEXUS/
-│
-├── frontend/
-│   ├── public/
-│   ├── src/
-│   │   ├── components/
-│   │   ├── pages/
-│   │   ├── services/
-│   │   ├── hooks/
-│   │   └── assets/
-│   └── package.json
-│
-├── backend/
-│   ├── src/
-│   │   ├── controllers/
-│   │   ├── routes/
-│   │   ├── services/
-│   │   ├── middleware/
-│   │   ├── models/
-│   │   └── config/
-│   └── package.json
-│
-├── execution-service/
-│   ├── workers/
-│   ├── runners/
-│   └── Dockerfile
-│
-├── docs/
-│   ├── architecture.md
-│   └── api.md
-│
-├── .env.example
-├── .gitignore
-└── README.md
-```
+| Role | Email Address | Password | Permissions Scope |
+|---|---|---|---|
+| **Vice Chancellor** | `vc@labnexus.edu` | `NexusPass123!` | Institutional Analytics & Audit Logs |
+| **HOD (CSBS)** | `hod.csbs@labnexus.edu` | `NexusPass123!` | Department-scoped monitoring & labs |
+| **Faculty** | `demo.faculty@labnexus.test` | `FacultyPass123!` | Lab management & question authoring |
+| **Student** | `demo.student@labnexus.test` | `StudentPass123!` | Coding workspace & examination room |
 
-This structure is a suggested organization, not a representation of existing files.
+*Note: The login page also features one-click demo login buttons for rapid switching.*
 
 ---
 
 ## 🚀 Getting Started
 
 ### Prerequisites
+- **Node.js**: v18.0.0 or higher (v24 recommended)
+- **PostgreSQL**: v14 or higher running on `localhost:5432`
+- **Compiler/Runtime**: Python (`py` or `python3`) and GCC (`gcc.exe` or MinGW) installed and available in PATH.
 
-Before running the project, install the tools required by your selected stack.
+### Installation
 
-Depending on the implementation, these may include:
+1. **Clone & Install Dependencies**
+   ```bash
+   git clone <repo_url>
+   cd LabNEXUS
 
-- Git
-- Node.js and npm, if using a JavaScript-based stack
-- Python, if using a Python-based backend
-- PostgreSQL or the selected database
-- Docker, if using isolated code execution
+   # Install root dependencies
+   npm install
 
-### 1. Clone the Repository
+   # Install web dependencies
+   cd apps/web && npm install && cd ../..
 
-```bash
-git clone https://github.com/YOUR_USERNAME/LabNEXUS.git
-```
+   # Install API dependencies
+   cd apps/api && npm install && cd ../..
+   ```
 
-Replace `YOUR_USERNAME` and `LabNEXUS` with the actual GitHub username and repository name.
+2. **Configure Environment Variables**
+   Ensure `apps/api/.env` is configured with your PostgreSQL credentials:
+   ```env
+   PORT=5000
+   DATABASE_URL="postgresql://postgres:postgres@localhost:5432/labnexus?schema=public"
+   JWT_SECRET="71148e0a03dea2543252d50f34aa97b99a6b81bb81ce03c7316a7b608be516d4"
+   ```
 
-### 2. Navigate to the Project
+3. **Database Migration & Seed**
+   ```bash
+   # Synchronize schema to PostgreSQL
+   cd apps/api
+   npx prisma db push
+   npx prisma generate
 
-```bash
-cd LabNEXUS
-```
+   # Seed institutional data
+   npm run seed
+   cd ../..
+   ```
 
-### 3. Install Dependencies
+4. **Run the Application**
+   Open two terminal sessions:
 
-Run the package installation command for the selected frontend and backend.
+   **Terminal 1 — Backend API Server:**
+   ```bash
+   npm run dev:api
+   # API will run on http://localhost:5000
+   ```
 
-For a Node.js application:
+   **Terminal 2 — Frontend Application:**
+   ```bash
+   npm run dev:web
+   # Portal will run on http://localhost:3000
+   ```
 
-```bash
-npm install
-```
-
-Run this command only in a directory containing the appropriate `package.json`.
-
-### 4. Configure Environment Variables
-
-Create a local `.env` file using the project's environment template.
-
-Example variables:
-
-```env
-PORT=5000
-DATABASE_URL=
-JWT_SECRET=
-FRONTEND_URL=http://localhost:3000
-```
-
-These are illustrative placeholders. Use the variable names required by the actual implementation.
-
-**Never commit real credentials, API keys, tokens, or production secrets to GitHub.**
-
-### 5. Start the Application
-
-Use the scripts defined in the relevant `package.json` files or the run instructions for the selected framework.
-
-Example for a Node.js application:
-
-```bash
-npm run dev
-```
-
-The actual startup commands, database migrations, and required services must be documented once the project setup is finalized.
+5. **Run Verification & Engine Tests**
+   ```bash
+   npm run test:exec
+   # Tests Python, C compilation, timeout termination, and evaluation engine.
+   ```
 
 ---
 
-## 🔄 How It Works
+## ⚙️ Code Execution Engine
 
-The intended workflow connects the main activities of a university coding lab.
-
-1. **Authentication:** A student or faculty member accesses the platform with the appropriate permissions.
-2. **Course Access:** Students view their enrolled laboratory courses.
-3. **Assignment Publication:** Faculty publish programming tasks and deadlines.
-4. **Code Submission:** Students submit their solutions before the deadline.
-5. **Evaluation:** Submissions are reviewed manually or processed through an automated evaluation pipeline.
-6. **Feedback:** Results, marks, and relevant feedback are made available to students.
-7. **Progress Monitoring:** Faculty review class-level submission status and performance.
+Submitted code is evaluated through a layered, sandboxed execution service (`apps/api/src/services/execution.service.ts`):
+- **Temporary Working Directory Sandboxing**: Each run creates a fresh, isolated temporary folder (`os.tmpdir()/labnexus-exec-<id>`) that is forcefully cleaned up upon completion.
+- **Strict Execution Timeouts**: Default 2,000ms timeout per test case. If an infinite loop is detected, the entire child process tree is forcefully terminated (`taskkill /F /T` on Windows or `SIGKILL` on Linux) and flagged as `TIME_LIMIT_EXCEEDED`.
+- **Output Truncation**: Maximum stdout/stderr capture limited to 64 KB to defend against memory exhaustion attacks.
+- **Hidden Test Case Masking**: Student requests receive sanitized outputs where private test inputs and expected outputs are never returned to the browser.
+- **Compiler Support**: Native GCC MinGW compilation for C/C++ and unbuffered Python 3 execution.
 
 ---
 
-## 🔒 Security and Reliability
+## 📡 API Routes
 
-Security is especially important when a platform executes user-submitted programs.
+### Authentication
+- `POST /api/auth/register` — Public student registration.
+- `POST /api/auth/login` — Issues signed JWT with role claim.
+- `GET /api/auth/me` — Fetches current authenticated profile.
 
-The proposed design includes the following considerations:
+### Laboratories & Enrollments
+- `GET /api/labs` — Lists laboratories (filtered by role).
+- `POST /api/labs` — Creates laboratory (Faculty/HOD).
+- `GET /api/labs/:labId` — Fetches laboratory details.
+- `PUT /api/labs/:labId/publish` — Toggles publication status.
+- `POST /api/labs/:labId/enrollment-key` — Generates unique enrollment key.
+- `POST /api/labs/join-by-key` — Enrolls student using key.
+- `POST /api/labs/:labId/enroll` — Enrolls individual student by email.
+- `DELETE /api/labs/:labId/students/:studentId` — Removes student from lab.
+- `POST /api/labs/:labId/enroll/bulk` — Uploads CSV or Excel student roster.
 
-- **Authentication and authorization:** Restrict protected actions according to user roles.
-- **Input validation:** Validate submissions, uploaded files, and API requests.
-- **Execution isolation:** Execute untrusted code in isolated, resource-limited environments.
-- **Resource controls:** Apply CPU, memory, execution-time, and output-size limits.
-- **Access control:** Prevent users from accessing unauthorized courses, submissions, or grades.
-- **Secret management:** Keep credentials and sensitive configuration outside version control.
-- **Data protection:** Protect student information and academic records.
-- **Auditability:** Maintain appropriate records of submissions and grading operations.
+### Questions & Evaluation
+- `GET /api/labs/:labId/questions` — Lists questions (masks hidden tests for students).
+- `GET /api/questions/:questionId` — Question details and constraints.
+- `POST /api/labs/:labId/questions` — Creates question with test cases.
+- `POST /api/questions/:questionId/run` — Practice execution with custom stdin.
+- `POST /api/questions/:questionId/submit` — Automated grading against all test cases.
 
-These are design requirements and should not be interpreted as evidence that security controls have already been implemented or independently tested.
+### Examinations
+- `GET /api/labs/:labId/examinations` — Lists scheduled assessments.
+- `GET /api/examinations/:examinationId` — Examination room with server-synchronized time.
+- `POST /api/labs/:labId/examinations` — Schedules practical examination.
+- `GET /api/examinations/:examinationId/results` — Grade summary and CSV export.
 
----
-
-## 🗺️ Roadmap
-
-The roadmap below describes potential development milestones.
-
-- [ ] Finalize functional and non-functional requirements.
-- [ ] Design the database schema and application architecture.
-- [ ] Build the core frontend and navigation.
-- [ ] Implement authentication and role-based access.
-- [ ] Develop student and faculty dashboards.
-- [ ] Implement assignment creation and deadline management.
-- [ ] Add code submission and submission history.
-- [ ] Develop the secure code execution service.
-- [ ] Implement automated test-case evaluation.
-- [ ] Add grading, feedback, and performance analytics.
-- [ ] Explore code similarity analysis.
-- [ ] Investigate university AMS integration.
-- [ ] Add automated testing and deployment workflows.
-- [ ] Complete security testing and documentation.
-
-Update the checkboxes as milestones are completed.
+### Analytics & University AMS
+- `GET /api/analytics/institution` — Executive VC metrics and comparisons.
+- `GET /api/analytics/department` — HOD department-scoped statistics.
+- `GET /api/analytics/audit-logs` — Administrative audit trail.
+- `GET /api/ams/status` — University Attendance Management System contract status.
 
 ---
 
-## 🔮 Future Scope
+## 🛡️ Security & Reliability
 
-Potential extensions include:
-
-- **University AMS Integration:** Synchronize course enrollment, institutional authentication, and grades where supported.
-- **AI-Assisted Assignment Authoring:** Help faculty draft programming problems and test cases.
-- **Advanced Analytics:** Identify performance trends and areas where students may need additional support.
-- **Peer Review:** Enable structured peer evaluation where appropriate.
-- **Leaderboards:** Introduce optional coding-performance rankings.
-- **Scalable Execution Infrastructure:** Support concurrent submissions using queued jobs and multiple execution workers.
-- **Learning Management Integration:** Explore standards such as Learning Tools Interoperability (LTI), where supported.
-
-These capabilities remain part of the proposed future scope until implemented and tested.
-
----
-
-## 🤝 Contributing
-
-Contributions, suggestions, and constructive feedback are welcome.
-
-To contribute:
-
-1. Fork the repository.
-2. Create a feature branch.
-3. Implement your changes.
-4. Test the changes locally.
-5. Commit with a clear, descriptive message.
-6. Open a pull request describing the changes.
-
-Example:
-
-```bash
-git checkout -b feature/assignment-management
-git add .
-git commit -m "Add assignment management"
-git push origin feature/assignment-management
-```
-
-Please follow the project's coding conventions and avoid committing credentials or unrelated generated files.
-
----
-
-## 👩‍💻 Team
-
-**LabNEXUS Development Team**
-
-Developed as an academic software project focused on improving university programming laboratory workflows.
-
-Add team member names, responsibilities, and profile links here.
-
----
-
-## 📄 License
-
-The project's license has not yet been specified.
-
-Before publishing or accepting external contributions, choose an appropriate open-source license or document the intended usage terms.
-
----
-
-<div align="center">
-
-### LabNEXUS
-
-**Bringing programming labs into one connected workspace.**
-
-Made with 💻 for better coding education.
-
-</div>
+- **No Blind Trust**: Privileged roles cannot be self-assigned during registration.
+- **Database-Backed Role Authorization**: Tokens verify current PostgreSQL database roles on each protected request.
+- **Server-Side Deadline Enforcement**: The backend verifies assessment start and end windows, rejecting late submissions.
+- **SQL Injection Defense**: All database queries are parameter-safe via Prisma ORM.
+- **Process Isolation**: Untrusted code never executes directly in the main server loop.
