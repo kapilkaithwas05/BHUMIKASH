@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
+    "dev": "node scripts/dev.mjs",
     "dev:api": "npm run dev --prefix apps/api",
     "dev:web": "npm run dev --prefix apps/web",
     "build:api": "npm run build --prefix apps/api",

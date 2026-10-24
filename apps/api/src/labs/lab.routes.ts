@@ -9,6 +9,7 @@ import {
 } from "../middleware/auth.middleware";
 import { authorizeRoles } from "../middleware/role.middleware";
 import { getParam } from "../lib/params";
+import { findManageableLab } from "../lib/access";
 
 const router = Router();
 
@@ -20,6 +21,19 @@ router.post(
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { title, code, description, language, departmentId } = req.body;
+      const actor = req.user!;
+
+      let assignedDepartmentId = departmentId || null;
+      if (actor.role !== "VICE_CHANCELLOR") {
+        const creator = await prisma.user.findUnique({
+          where: { id: actor.userId },
+          select: { departmentId: true },
+        });
+        if (departmentId && departmentId !== creator?.departmentId) {
+          return res.status(403).json({ message: "You may only create labs in your department" });
+        }
+        assignedDepartmentId = creator?.departmentId || null;
+      }
 
       if (typeof title !== "string" || !title.trim()) {
         return res.status(400).json({
@@ -52,7 +66,7 @@ router.post(
               : null,
           language: language as "C" | "CPP" | "JAVA" | "PYTHON",
           enrollmentKey: generatedKey,
-          departmentId: departmentId || null,
+          departmentId: assignedDepartmentId,
           createdById: req.user!.userId,
         },
       });
@@ -91,8 +105,25 @@ router.get(
       }
 
       if (role === "FACULTY" || role === "HOD") {
+        // A HOD governs only their own department: labs assigned to that department, plus
+        // labs created by faculty who belong to it. Faculty see only the labs they created.
+        const hod = role === "HOD"
+          ? await prisma.user.findUnique({
+              where: { id: userId },
+              select: { departmentId: true },
+            })
+          : null;
+
         const labs = await prisma.lab.findMany({
-          where: role === "HOD" ? {} : { createdById: userId },
+          where:
+            hod?.departmentId
+              ? {
+                  OR: [
+                    { departmentId: hod.departmentId },
+                    { createdBy: { departmentId: hod.departmentId } },
+                  ],
+                }
+              : { createdById: userId },
           orderBy: { createdAt: "desc" },
           include: {
             createdBy: { select: { id: true, name: true, email: true } },
@@ -124,7 +155,9 @@ router.get(
           },
         });
 
-        return res.status(200).json({ labs });
+        return res.status(200).json({
+          labs: labs.map(({ enrollmentKey: _enrollmentKey, ...lab }) => lab),
+        });
       }
 
       return res.status(403).json({
@@ -188,6 +221,19 @@ router.post(
         },
       });
 
+      try {
+        await prisma.notification.create({
+          data: {
+            userId,
+            title: "Enrolled in laboratory",
+            message: `You have been enrolled in "${lab.title}". Open the lab to view its assignments.`,
+            type: "ENROLLMENT",
+          },
+        });
+      } catch (notifyError) {
+        console.error("Enrollment notification failed:", notifyError);
+      }
+
       return res.status(201).json({
         message: "Successfully enrolled in " + lab.title,
         lab,
@@ -228,7 +274,14 @@ router.get(
         return res.status(404).json({ message: "Laboratory not found" });
       }
 
+      if (role !== "STUDENT" && !await findManageableLab(labId, req.user!)) {
+        return res.status(403).json({ message: "You do not have permission to access this laboratory" });
+      }
+
       if (role === "STUDENT") {
+        if (!lab.isPublished) {
+          return res.status(403).json({ message: "This laboratory is not published" });
+        }
         const isEnrolled = await prisma.enrollment.findUnique({
           where: {
             studentId_labId: {
@@ -241,6 +294,8 @@ router.get(
         if (!isEnrolled) {
           return res.status(403).json({ message: "You are not enrolled in this lab" });
         }
+        const { enrollmentKey: _enrollmentKey, ...studentLab } = lab;
+        return res.status(200).json({ lab: studentLab });
       }
 
       return res.status(200).json({ lab });
@@ -264,6 +319,9 @@ router.put(
       if (!labId) {
         return res.status(400).json({ message: "Lab ID is required" });
       }
+
+      const existing = await findManageableLab(labId, req.user!);
+      if (!existing) return res.status(404).json({ message: "Lab not found or you lack permission to manage it" });
 
       const lab = await prisma.lab.update({
         where: { id: labId },
@@ -297,6 +355,9 @@ router.post(
       }
 
       const newKey = "LAB-" + crypto.randomBytes(4).toString("hex").toUpperCase();
+
+      const existing = await findManageableLab(labId, req.user!);
+      if (!existing) return res.status(404).json({ message: "Lab not found or you lack permission to manage it" });
 
       const lab = await prisma.lab.update({
         where: { id: labId },
@@ -337,12 +398,7 @@ router.post(
         });
       }
 
-      const lab = await prisma.lab.findFirst({
-        where: {
-          id: labId,
-          ...(req.user!.role === "FACULTY" ? { createdById: req.user!.userId } : {}),
-        },
-      });
+      const lab = await findManageableLab(labId, req.user!);
 
       if (!lab) {
         return res.status(404).json({
@@ -390,6 +446,19 @@ router.post(
         },
       });
 
+      try {
+        await prisma.notification.create({
+          data: {
+            userId: student.id,
+            title: "Enrolled in laboratory",
+            message: `You have been enrolled in "${lab.title}" by your faculty instructor. Open the lab to view its assignments.`,
+            type: "ENROLLMENT",
+          },
+        });
+      } catch (notifyError) {
+        console.error("Enrollment notification failed:", notifyError);
+      }
+
       return res.status(201).json({
         message: "Student enrolled successfully",
         enrollment,
@@ -420,22 +489,17 @@ router.get(
 
       const { userId, role } = req.user!;
 
-      const lab = await prisma.lab.findFirst({
-        where: {
-          id: labId,
-          ...(role === "FACULTY" ? { createdById: userId } : {}),
-        },
+      const lab = await findManageableLab(labId, req.user!);
+      if (!lab) {
+        return res.status(404).json({ message: "Lab not found or you lack permission to manage it" });
+      }
+      const labSummary = await prisma.lab.findUnique({
+        where: { id: lab.id },
         select: {
           id: true,
           title: true,
         },
       });
-
-      if (!lab) {
-        return res.status(404).json({
-          message: "Lab not found or you do not have permission to manage it",
-        });
-      }
 
       const enrollments = await prisma.enrollment.findMany({
         where: {
@@ -459,7 +523,7 @@ router.get(
       });
 
       return res.status(200).json({
-        lab,
+        lab: labSummary,
         totalStudents: enrollments.length,
         students: enrollments.map((enrollment) => ({
           enrollmentId: enrollment.id,
@@ -490,12 +554,7 @@ router.delete(
         return res.status(400).json({ message: "Invalid lab ID or student ID" });
       }
 
-      const lab = await prisma.lab.findFirst({
-        where: {
-          id: labId,
-          ...(req.user!.role === "FACULTY" ? { createdById: req.user!.userId } : {}),
-        },
-      });
+      const lab = await findManageableLab(labId, req.user!);
 
       if (!lab) {
         return res.status(404).json({
@@ -561,16 +620,7 @@ router.post(
         });
       }
 
-      const lab = await prisma.lab.findFirst({
-        where: {
-          id: labId,
-          ...(req.user!.role === "FACULTY" ? { createdById: req.user!.userId } : {}),
-        },
-        select: {
-          id: true,
-          title: true,
-        },
-      });
+      const lab = await findManageableLab(labId, req.user!);
 
       if (!lab) {
         return res.status(404).json({
@@ -597,6 +647,8 @@ router.post(
         unknownStudents: [] as string[],
         invalidRows: parsed.invalidRows,
       };
+
+      const newlyEnrolledIds: string[] = [];
 
       for (const email of parsed.emails) {
         const student = await prisma.user.findUnique({
@@ -625,8 +677,24 @@ router.post(
 
         if (result.count === 1) {
           summary.enrolled.push(email);
+          newlyEnrolledIds.push(student.id);
         } else {
           summary.alreadyEnrolled.push(email);
+        }
+      }
+
+      if (newlyEnrolledIds.length > 0) {
+        try {
+          await prisma.notification.createMany({
+            data: newlyEnrolledIds.map((studentId) => ({
+              userId: studentId,
+              title: "Enrolled in laboratory",
+              message: `You have been enrolled in "${lab.title}" by your faculty instructor. Open the lab to view its assignments.`,
+              type: "ENROLLMENT",
+            })),
+          });
+        } catch (notifyError) {
+          console.error("Bulk enrollment notification failed:", notifyError);
         }
       }
 

@@ -21,6 +21,19 @@ export default {
           900: "#312e81",
           950: "#1e1b4b",
         },
+        surface: {
+          light: "#f8fafc",
+          dark: "#0f172a",
+          card: {
+            light: "#ffffff",
+            dark: "#1e293b",
+          },
+        },
+      },
+      boxShadow: {
+        'soft': '0 2px 15px -3px rgba(0, 0, 0, 0.07), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+        'card': '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+        'glow': '0 0 15px 5px rgba(99, 102, 241, 0.15)',
       },
       fontFamily: {
         sans: [

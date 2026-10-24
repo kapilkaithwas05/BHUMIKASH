@@ -20,6 +20,9 @@ import {
   Lock,
   Globe,
   Upload,
+  AlertTriangle,
+  Clock,
+  TrendingUp,
 } from "lucide-react";
 
 export const LabDetail: React.FC = () => {
@@ -32,7 +35,7 @@ export const LabDetail: React.FC = () => {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [examinations, setExaminations] = useState<Examination[]>([]);
   const [students, setStudents] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState<"questions" | "exams" | "students" | "ams">("questions");
+  const [activeTab, setActiveTab] = useState<"questions" | "exams" | "students">("questions");
   const [loading, setLoading] = useState(true);
 
   // Key copied status
@@ -49,6 +52,7 @@ export const LabDetail: React.FC = () => {
   const [qDesc, setQDesc] = useState("");
   const [qDiff, setQDiff] = useState<"EASY" | "MEDIUM" | "HARD">("EASY");
   const [qMarks, setQMarks] = useState(10);
+  const [qAttempts, setQAttempts] = useState<number | "">("");
   const [qStarter, setQStarter] = useState("");
   const [qTestCases, setQTestCases] = useState<
     { input: string; expectedOutput: string; isHidden: boolean; explanation?: string }[]
@@ -143,6 +147,7 @@ export const LabDetail: React.FC = () => {
         description: qDesc,
         difficulty: qDiff,
         marks: qMarks,
+        attemptsAllowed: qAttempts === "" ? null : Number(qAttempts),
         starterCode: qStarter,
         testCases: qTestCases.filter((tc) => tc.expectedOutput.trim() !== ""),
       });
@@ -215,319 +220,390 @@ export const LabDetail: React.FC = () => {
     }
   };
 
-  if (loading) return <div className="p-8 text-center text-slate-500">Loading laboratory details...</div>;
-  if (!lab) return <div className="p-8 text-center text-slate-500">Laboratory not found.</div>;
+  if (loading) return (
+    <div className="flex flex-col items-center justify-center min-h-[400px] gap-3">
+      <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+      <span className="text-sm font-bold text-slate-500 uppercase tracking-widest">Synchronizing Lab Data...</span>
+    </div>
+  );
+
+  if (!lab) return (
+    <div className="portal-card p-12 text-center">
+      <AlertTriangle className="w-12 h-12 text-rose-500 mx-auto mb-4" />
+      <h2 className="text-xl font-black text-slate-900 dark:text-white uppercase">Laboratory Not Found</h2>
+      <p className="text-slate-500 mt-2">The laboratory you are looking for might have been moved or deleted.</p>
+      <Link to="/" className="btn-primary mt-6 inline-flex">Back to Dashboard</Link>
+    </div>
+  );
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-300">
-      {/* Header Card */}
-      <div className="bg-white p-6 sm:p-8 rounded-2xl border border-slate-200 shadow-sm">
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-xs font-mono font-bold px-2.5 py-1 rounded bg-indigo-50 text-indigo-700 border border-indigo-200">
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-12">
+      {/* Dynamic Breadcrumb-style Header */}
+      <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-2">
+        <Link to="/" className="hover:text-indigo-600 transition-colors">Dashboard</Link>
+        <span>/</span>
+        <span className="text-indigo-600 dark:text-indigo-400">{lab.code || "Lab"}</span>
+      </div>
+
+      {/* Modern Lab Banner */}
+      <div className="portal-card relative overflow-hidden bg-white dark:bg-slate-900 border-none shadow-2xl shadow-slate-200/50 dark:shadow-none ring-1 ring-slate-200 dark:ring-slate-800">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-600/5 rounded-full -mr-32 -mt-32 blur-3xl" />
+        <div className="absolute bottom-0 left-0 w-64 h-64 bg-violet-600/5 rounded-full -ml-32 -mb-32 blur-3xl" />
+        
+        <div className="relative p-8 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-8">
+          <div className="space-y-4 max-w-3xl">
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="px-3 py-1 rounded-xl bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest shadow-lg shadow-indigo-500/20">
                 {lab.language}
               </span>
-              <span className="text-xs font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-600">
-                {lab.code || "Lab"}
+              <span className="px-3 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-[10px] font-black uppercase tracking-widest ring-1 ring-slate-200 dark:ring-slate-700">
+                {lab.code || "Course Lab"}
               </span>
-              <span
-                className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${
-                  lab.isPublished ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-amber-50 text-amber-700 border border-amber-200"
-                }`}
-              >
-                {lab.isPublished ? "Published" : "Draft (Unpublished)"}
-              </span>
+              {lab.isPublished ? (
+                <span className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 text-[10px] font-black uppercase tracking-widest ring-1 ring-emerald-200 dark:ring-emerald-800">
+                  <Globe className="w-3 h-3" /> Live & Published
+                </span>
+              ) : (
+                <span className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 text-[10px] font-black uppercase tracking-widest ring-1 ring-amber-200 dark:ring-amber-800">
+                  <Lock className="w-3 h-3" /> Internal Draft
+                </span>
+              )}
             </div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">{lab.title}</h1>
-            <p className="text-sm text-slate-500 mt-1 max-w-3xl">{lab.description || "No description provided."}</p>
+            
+            <h1 className="text-4xl sm:text-5xl font-black text-slate-900 dark:text-white tracking-tighter uppercase leading-[0.9]">
+              {lab.title}
+            </h1>
+            
+            <p className="text-slate-500 dark:text-slate-400 text-lg font-medium leading-relaxed">
+              {lab.description || "Master core concepts through practical hands-on laboratory sessions."}
+            </p>
           </div>
 
-          {/* Action buttons for Faculty */}
+          {/* Instructor Quick Actions */}
           {isInstructor && (
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-col sm:flex-row lg:flex-col gap-3 shrink-0 w-full sm:w-auto">
               <button
                 onClick={handleTogglePublish}
-                className={`px-3 py-2 rounded-lg text-xs font-semibold border transition-colors ${
+                className={`w-full px-6 py-3 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all shadow-lg active:scale-95 ${
                   lab.isPublished
-                    ? "bg-slate-50 text-slate-700 border-slate-300 hover:bg-slate-100"
-                    : "bg-emerald-600 text-white border-emerald-600 hover:bg-emerald-700"
+                    ? "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700"
+                    : "bg-emerald-600 text-white hover:bg-emerald-700 shadow-emerald-500/20"
                 }`}
               >
-                {lab.isPublished ? "Unpublish Lab" : "Publish Lab to Students"}
+                {lab.isPublished ? "Unpublish Lab" : "Publish to Students"}
               </button>
-
-              <button
-                onClick={() => setIsQuestionModalOpen(true)}
-                className="flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors"
-              >
-                <Plus className="w-4 h-4" /> Add Question
-              </button>
-
-              <button
-                onClick={() => setIsExamModalOpen(true)}
-                className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors"
-              >
-                <Calendar className="w-4 h-4" /> Schedule Exam
-              </button>
+              <div className="flex gap-2 w-full">
+                <button
+                  onClick={() => setIsQuestionModalOpen(true)}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest shadow-lg shadow-indigo-500/20 transition-all active:scale-95"
+                >
+                  <Plus className="w-4 h-4" /> Add Question
+                </button>
+                <button
+                  onClick={() => setIsExamModalOpen(true)}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-slate-900 dark:bg-white dark:text-slate-900 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest shadow-lg transition-all active:scale-95"
+                >
+                  <Calendar className="w-4 h-4" /> Schedule Exam
+                </button>
+              </div>
             </div>
           )}
         </div>
 
         {/* Enrollment Key Banner for Faculty */}
         {isInstructor && (
-          <div className="mt-6 pt-6 border-t border-slate-100 flex flex-wrap items-center justify-between gap-4 bg-slate-50/70 p-4 rounded-xl border border-slate-200/60">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center">
-                <KeyRound className="w-5 h-5" />
+          <div className="bg-slate-50/50 dark:bg-slate-800/30 border-t border-slate-100 dark:border-slate-800 p-6 flex flex-col md:flex-row items-center justify-between gap-6">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-lg shadow-indigo-500/20">
+                <KeyRound className="w-6 h-6" />
               </div>
               <div>
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">
                   Student Enrollment Key
                 </span>
-                <div className="font-mono text-base font-bold text-slate-900 tracking-wider">
-                  {lab.enrollmentKey || "No Key Generated"}
+                <div className="font-mono text-2xl font-black text-slate-900 dark:text-white tracking-[0.2em] mt-0.5">
+                  {lab.enrollmentKey || "NOT_SET"}
                 </div>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 w-full md:w-auto justify-center">
               <button
                 onClick={handleCopyKey}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg text-xs font-semibold text-slate-700 shadow-xs transition-colors"
+                className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-xl text-[11px] font-bold text-slate-700 dark:text-slate-300 shadow-sm transition-all active:scale-95"
               >
-                {keyCopied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                {keyCopied ? "Copied Key" : "Copy Key"}
+                {keyCopied ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
+                {keyCopied ? "COPIED" : "COPY KEY"}
               </button>
               <button
                 onClick={handleRegenerateKey}
-                className="px-3 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-white rounded-lg transition-colors"
+                className="px-4 py-2.5 text-[11px] font-bold text-slate-500 hover:text-indigo-600 uppercase tracking-wider transition-colors"
               >
                 Regenerate
               </button>
+              <div className="h-8 w-[1px] bg-slate-200 dark:bg-slate-700 mx-2 hidden md:block" />
               <button
                 onClick={() => setIsEnrollModalOpen(true)}
-                className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-semibold transition-colors"
+                className="px-4 py-2.5 bg-indigo-50 dark:bg-indigo-900/20 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 text-indigo-700 dark:text-indigo-400 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all"
               >
-                Enroll Email
+                Direct Enroll
               </button>
               <button
                 onClick={() => setIsBulkModalOpen(true)}
-                className="flex items-center gap-1 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg text-xs font-semibold transition-colors"
+                className="flex items-center gap-2 px-4 py-2.5 bg-emerald-50 dark:bg-emerald-900/20 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all"
               >
-                <FileSpreadsheet className="w-3.5 h-3.5" /> Bulk CSV/Excel
+                <FileSpreadsheet className="w-4 h-4" /> Bulk Upload
               </button>
             </div>
           </div>
         )}
       </div>
 
-      {/* Tabs */}
-      <div className="border-b border-slate-200">
-        <nav className="flex space-x-8">
+      {/* Tabs - Modern Portal Style */}
+      <div className="flex items-center gap-2 p-1.5 bg-slate-100 dark:bg-slate-900/50 rounded-2xl w-fit border border-slate-200 dark:border-slate-800">
+        <button
+          onClick={() => setActiveTab("questions")}
+          className={`px-6 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${
+            activeTab === "questions"
+              ? "bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-lg shadow-slate-200/50 dark:shadow-none"
+              : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+          }`}
+        >
+          Questions ({questions.length})
+        </button>
+        <button
+          onClick={() => setActiveTab("exams")}
+          className={`px-6 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${
+            activeTab === "exams"
+              ? "bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-lg shadow-slate-200/50 dark:shadow-none"
+              : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+          }`}
+        >
+          Assessments ({examinations.length})
+        </button>
+        {isInstructor && (
           <button
-            onClick={() => setActiveTab("questions")}
-            className={`py-3 px-1 font-semibold text-sm border-b-2 transition-colors ${
-              activeTab === "questions"
-                ? "border-indigo-600 text-indigo-600"
-                : "border-transparent text-slate-500 hover:text-slate-700"
+            onClick={() => setActiveTab("students")}
+            className={`px-6 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${
+              activeTab === "students"
+                ? "bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-lg shadow-slate-200/50 dark:shadow-none"
+                : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
             }`}
           >
-            Programming Questions ({questions.length})
+            Roster ({students.length})
           </button>
-          <button
-            onClick={() => setActiveTab("exams")}
-            className={`py-3 px-1 font-semibold text-sm border-b-2 transition-colors ${
-              activeTab === "exams"
-                ? "border-indigo-600 text-indigo-600"
-                : "border-transparent text-slate-500 hover:text-slate-700"
-            }`}
-          >
-            Examinations & Assessments ({examinations.length})
-          </button>
-          {isInstructor && (
-            <button
-              onClick={() => setActiveTab("students")}
-              className={`py-3 px-1 font-semibold text-sm border-b-2 transition-colors ${
-                activeTab === "students"
-                  ? "border-indigo-600 text-indigo-600"
-                  : "border-transparent text-slate-500 hover:text-slate-700"
-              }`}
-            >
-              Enrolled Students ({students.length})
-            </button>
-          )}
-        </nav>
+        )}
       </div>
 
-      {/* Tab 1: Questions */}
-      {activeTab === "questions" && (
-        <div className="space-y-4">
-          {questions.length === 0 ? (
-            <div className="bg-white rounded-xl border border-dashed border-slate-300 p-12 text-center">
-              <Code2 className="w-10 h-10 text-slate-400 mx-auto mb-3" />
-              <h3 className="font-bold text-slate-800 text-base">No programming questions added yet</h3>
-              <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-                {isInstructor ? "Add the first coding challenge with sample and hidden test cases." : "Check back once your instructor publishes questions."}
-              </p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 gap-4">
-              {questions.map((q, idx) => (
+      {/* Content Areas */}
+      <div className="min-h-[400px]">
+        {/* Tab 1: Questions Grid */}
+        {activeTab === "questions" && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {questions.length === 0 ? (
+              <div className="col-span-full portal-card py-20 text-center border-2 border-dashed border-slate-200 dark:border-slate-800 bg-transparent">
+                <div className="w-16 h-16 rounded-full bg-slate-50 dark:bg-slate-900 flex items-center justify-center mx-auto mb-4 border border-slate-200 dark:border-slate-800">
+                  <Code2 className="w-8 h-8 text-slate-400" />
+                </div>
+                <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase">Empty Question Bank</h3>
+                <p className="text-slate-500 text-sm mt-2 max-w-sm mx-auto">
+                  {isInstructor ? "Kickstart the learning by adding your first coding challenge." : "Your instructor hasn't published any questions yet."}
+                </p>
+                {isInstructor && (
+                  <button onClick={() => setIsQuestionModalOpen(true)} className="btn-primary mt-6 inline-flex">Add New Question</button>
+                )}
+              </div>
+            ) : (
+              questions.map((q, idx) => (
                 <div
                   key={q.id}
-                  className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm hover:border-indigo-300 transition-all flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4"
+                  className="portal-card group hover:scale-[1.02] hover:shadow-2xl hover:shadow-indigo-500/10 transition-all duration-300 flex flex-col justify-between"
                 >
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-slate-400">#{idx + 1}</span>
-                      <h3 className="font-bold text-base text-slate-900">{q.title}</h3>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Question #{idx + 1}</span>
                       <span
-                        className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${
+                        className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-lg ${
                           q.difficulty === "EASY"
-                            ? "bg-emerald-50 text-emerald-700"
+                            ? "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400"
                             : q.difficulty === "MEDIUM"
-                            ? "bg-amber-50 text-amber-700"
-                            : "bg-rose-50 text-rose-700"
+                            ? "bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400"
+                            : "bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400"
                         }`}
                       >
                         {q.difficulty}
                       </span>
                     </div>
-                    <p className="text-xs text-slate-500 line-clamp-1 max-w-2xl">{q.description}</p>
-                    <div className="flex items-center gap-3 text-xs text-slate-500 pt-1">
-                      <span>Marks: <strong>{q.marks}</strong></span>
-                      <span>•</span>
-                      <span>Time Limit: <strong>{q.timeLimitMs}ms</strong></span>
-                      {isInstructor && (
-                        <>
-                          <span>•</span>
-                          <span>Test cases: <strong>{q.totalTestCasesCount || q.testCases?.length || 0}</strong></span>
-                        </>
-                      )}
+                    
+                    <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase leading-none group-hover:text-indigo-600 transition-colors">
+                      {q.title}
+                    </h3>
+                    
+                    <p className="text-slate-500 dark:text-slate-400 text-xs font-medium line-clamp-2">
+                      {q.description}
+                    </p>
+
+                    <div className="flex flex-wrap items-center gap-3 pt-2">
+                      <div className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-50 dark:bg-slate-800 rounded-lg text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
+                      <span className="w-2 h-2 rounded-full bg-indigo-500" /> {q.marks} Pts
+                      </div>
+                      <div className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-50 dark:bg-slate-800 rounded-lg text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
+                        <Clock className="w-3 h-3" /> {q.timeLimitMs}ms
+                      </div>
                     </div>
                   </div>
 
-                  <Link
-                    to={`/questions/${q.id}`}
-                    className="shrink-0 flex items-center gap-1.5 px-4 py-2 bg-indigo-50 hover:bg-indigo-600 text-indigo-700 hover:text-white rounded-lg text-xs font-semibold transition-colors"
-                  >
-                    <span>Solve in Monaco</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </Link>
+                  <div className="mt-6 pt-6 border-t border-slate-100 dark:border-slate-800">
+                    <Link
+                      to={`/questions/${q.id}`}
+                      className="w-full flex items-center justify-center gap-2 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[11px] font-black uppercase tracking-widest shadow-lg shadow-indigo-500/20 transition-all active:scale-95"
+                    >
+                      Solve Question <ArrowRight className="w-4 h-4" />
+                    </Link>
+                  </div>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+              ))
+            )}
+          </div>
+        )}
 
-      {/* Tab 2: Examinations */}
-      {activeTab === "exams" && (
-        <div className="space-y-4">
-          {examinations.length === 0 ? (
-            <div className="bg-white rounded-xl border border-dashed border-slate-300 p-12 text-center">
-              <Calendar className="w-10 h-10 text-slate-400 mx-auto mb-3" />
-              <h3 className="font-bold text-slate-800 text-base">No examinations scheduled yet</h3>
-              <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-                {isInstructor ? "Schedule practical coding assessments with timers and copy-paste deterrents." : "No upcoming examinations announced."}
-              </p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {examinations.map((exam) => (
-                <div key={exam.id} className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
-                  <div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700">
-                        {exam.durationMinutes} Mins Duration
+        {/* Tab 2: Examinations Grid */}
+        {activeTab === "exams" && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {examinations.length === 0 ? (
+              <div className="col-span-full portal-card py-20 text-center border-2 border-dashed border-slate-200 dark:border-slate-800 bg-transparent">
+                <Calendar className="w-12 h-12 text-slate-400 mx-auto mb-4" />
+                <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase">No Assessments</h3>
+                <p className="text-slate-500 text-sm mt-2 max-w-sm mx-auto">
+                  Stay tuned for scheduled practical exams and performance evaluations.
+                </p>
+              </div>
+            ) : (
+              examinations.map((exam) => (
+                <div key={exam.id} className="portal-card group hover:shadow-2xl transition-all duration-300 overflow-hidden">
+                  <div className="absolute top-0 right-0 p-4">
+                    {exam.disableCopyPaste && (
+                      <div className="w-8 h-8 rounded-full bg-rose-50 dark:bg-rose-900/20 flex items-center justify-center text-rose-600 dark:text-rose-400" title="Security Active">
+                        <Lock className="w-4 h-4" />
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2">
+                      <span className="px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 text-[10px] font-black uppercase tracking-widest ring-1 ring-indigo-200 dark:ring-indigo-800">
+                        {exam.durationMinutes} MINS
                       </span>
-                      {exam.disableCopyPaste && (
-                        <span className="flex items-center gap-1 text-[11px] font-semibold text-slate-500">
-                          <Lock className="w-3 h-3 text-slate-400" /> Copy-Paste Guarded
-                        </span>
-                      )}
+                      <span className="px-2.5 py-1 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-[10px] font-black uppercase tracking-widest ring-1 ring-slate-200 dark:ring-slate-700">
+                        {exam.totalMarks} PTS TOTAL
+                      </span>
                     </div>
-                    <h3 className="font-bold text-base text-slate-900 mt-2">{exam.title}</h3>
-                    <p className="text-xs text-slate-500 mt-1 line-clamp-2">{exam.description}</p>
-                    <div className="mt-3 text-xs text-slate-600 space-y-1">
-                      <div>Start: {new Date(exam.startTime).toLocaleString()}</div>
-                      <div>End: {new Date(exam.endTime).toLocaleString()}</div>
-                      <div>Total Marks: <strong>{exam.totalMarks}</strong></div>
+
+                    <h3 className="text-2xl font-black text-slate-900 dark:text-white uppercase leading-none group-hover:text-indigo-600 transition-colors">
+                      {exam.title}
+                    </h3>
+
+                    <div className="grid grid-cols-2 gap-4 bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-slate-100 dark:border-slate-800">
+                      <div className="space-y-1">
+                        <p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Starts</p>
+                        <p className="text-[11px] font-bold text-slate-900 dark:text-white uppercase">{new Date(exam.startTime).toLocaleDateString()} {new Date(exam.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Ends</p>
+                        <p className="text-[11px] font-bold text-slate-900 dark:text-white uppercase">{new Date(exam.endTime).toLocaleDateString()} {new Date(exam.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                      </div>
                     </div>
+
+                    <p className="text-slate-500 dark:text-slate-400 text-xs font-medium italic">
+                      {exam.description || "Official assessment for course completion."}
+                    </p>
                   </div>
 
-                  <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+                  <div className="mt-8 flex items-center gap-3">
                     {isInstructor ? (
                       <Link
                         to={`/examinations/${exam.id}/results`}
-                        className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 flex items-center gap-1"
+                        className="flex-1 flex items-center justify-center gap-2 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest shadow-lg shadow-indigo-500/20 transition-all active:scale-95"
                       >
-                        View Grade Summary <ArrowRight className="w-3.5 h-3.5" />
+                        Grade Analytics <TrendingUp className="w-4 h-4" />
                       </Link>
                     ) : (
                       <Link
                         to={`/examinations/${exam.id}`}
-                        className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors"
+                        className="flex-1 flex items-center justify-center gap-2 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest shadow-lg shadow-indigo-500/20 transition-all active:scale-95"
                       >
-                        Enter Examination Room
+                        Enter Assessment <ArrowRight className="w-4 h-4" />
                       </Link>
                     )}
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+              ))
+            )}
+          </div>
+        )}
 
-      {/* Tab 3: Enrolled Students */}
-      {activeTab === "students" && isInstructor && (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-            <h3 className="font-bold text-sm text-slate-800">Enrolled Student Roster</h3>
-            <span className="text-xs text-slate-500 font-semibold">{students.length} Total</span>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-slate-50 text-slate-500 font-semibold text-xs uppercase border-b border-slate-100">
-                <tr>
-                  <th className="py-3 px-6">Name</th>
-                  <th className="py-3 px-6">Roll Number</th>
-                  <th className="py-3 px-6">Email</th>
-                  <th className="py-3 px-6">Enrolled At</th>
-                  <th className="py-3 px-6 text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-slate-700">
-                {students.map((st) => (
-                  <tr key={st.id} className="hover:bg-slate-50/50">
-                    <td className="py-3.5 px-6 font-semibold text-slate-900">{st.name}</td>
-                    <td className="py-3.5 px-6 font-mono text-xs">{st.rollNumber || "—"}</td>
-                    <td className="py-3.5 px-6 text-slate-500">{st.email}</td>
-                    <td className="py-3.5 px-6 text-xs text-slate-400">
-                      {new Date(st.enrolledAt).toLocaleDateString()}
-                    </td>
-                    <td className="py-3.5 px-6 text-right">
-                      <button
-                        onClick={async () => {
-                          if (confirm(`Remove ${st.name} from this lab?`)) {
-                            await api.removeStudent(labId!, st.id);
-                            fetchLabData();
-                          }
-                        }}
-                        className="p-1 text-slate-400 hover:text-rose-600 rounded transition-colors"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </td>
+        {/* Tab 3: Student Roster */}
+        {activeTab === "students" && isInstructor && (
+          <div className="portal-card p-0 border-none overflow-hidden bg-white dark:bg-slate-900 shadow-2xl shadow-slate-200/50 dark:shadow-none ring-1 ring-slate-200 dark:ring-slate-800">
+            <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/50">
+              <div>
+                <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">Student Roster</h3>
+                <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mt-0.5">Academic Session 2026-27</p>
+              </div>
+              <div className="px-4 py-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 text-[11px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest shadow-sm">
+                {students.length} Enrolled
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm border-collapse">
+                <thead>
+                  <tr className="bg-slate-50/50 dark:bg-slate-800/30 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.15em] border-b border-slate-100 dark:border-slate-800">
+                    <th className="py-4 px-8">Full Name</th>
+                    <th className="py-4 px-8">Roll Number</th>
+                    <th className="py-4 px-8">Institutional Email</th>
+                    <th className="py-4 px-8">Status</th>
+                    <th className="py-4 px-8 text-right">Control</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
+                  {students.map((st) => (
+                    <tr key={st.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors group">
+                      <td className="py-5 px-8">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-700 flex items-center justify-center text-slate-500 dark:text-slate-400 font-black text-xs group-hover:from-indigo-600 group-hover:to-violet-600 group-hover:text-white transition-all">
+                            {st.name.charAt(0).toUpperCase()}
+                          </div>
+                          <span className="font-bold text-slate-900 dark:text-white uppercase tracking-wide">{st.name}</span>
+                        </div>
+                      </td>
+                      <td className="py-5 px-8 font-mono text-xs tracking-widest text-slate-500 dark:text-slate-400">{st.rollNumber || "NOT_ASSIGNED"}</td>
+                      <td className="py-5 px-8 text-xs font-medium text-slate-500 dark:text-slate-400">{st.email}</td>
+                      <td className="py-5 px-8">
+                        <span className="px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 text-[9px] font-black uppercase tracking-widest ring-1 ring-emerald-200 dark:ring-emerald-800">
+                          Active
+                        </span>
+                      </td>
+                      <td className="py-5 px-8 text-right">
+                        <button
+                          onClick={async () => {
+                            if (confirm(`Remove ${st.name} from this laboratory roster?`)) {
+                              await api.removeStudent(labId!, st.id);
+                              fetchLabData();
+                            }
+                          }}
+                          className="p-2.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-xl transition-all"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Create Question Modal */}
       <Modal
@@ -549,7 +625,7 @@ export const LabDetail: React.FC = () => {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">Difficulty</label>
               <select
@@ -568,6 +644,21 @@ export const LabDetail: React.FC = () => {
                 type="number"
                 value={qMarks}
                 onChange={(e) => setQMarks(Number(e.target.value))}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Attempts Allowed
+              </label>
+              <input
+                type="number"
+                min={1}
+                placeholder="Unlimited"
+                value={qAttempts}
+                onChange={(e) =>
+                  setQAttempts(e.target.value === "" ? "" : Number(e.target.value))
+                }
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
               />
             </div>

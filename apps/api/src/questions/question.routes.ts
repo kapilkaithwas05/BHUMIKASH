@@ -6,6 +6,7 @@ import {
 } from "../middleware/auth.middleware";
 import { authorizeRoles } from "../middleware/role.middleware";
 import { getParam } from "../lib/params";
+import { canManageLab, findManageableLab } from "../lib/access";
 
 const router = Router({ mergeParams: true });
 
@@ -17,6 +18,15 @@ router.get("/", authenticateToken, async (req: AuthenticatedRequest, res: Respon
 
     if (!labId) {
       return res.status(400).json({ message: "Lab ID is required" });
+    }
+
+    if (role === "STUDENT") {
+      const lab = await prisma.lab.findUnique({ where: { id: labId }, select: { isPublished: true } });
+      if (!lab?.isPublished) return res.status(403).json({ message: "This laboratory is not published" });
+    }
+
+    if (req.user!.role !== "STUDENT" && !await canManageLab(labId, req.user!)) {
+      return res.status(403).json({ message: "You do not have permission to view questions in this laboratory" });
     }
 
     // Verify access
@@ -88,6 +98,7 @@ router.get("/:questionId", authenticateToken, async (req: AuthenticatedRequest, 
             title: true,
             language: true,
             createdById: true,
+            isPublished: true,
           },
         },
         testCases: {
@@ -112,8 +123,15 @@ router.get("/:questionId", authenticateToken, async (req: AuthenticatedRequest, 
       return res.status(404).json({ message: "Question not found" });
     }
 
+    if (role !== "STUDENT" && !await canManageLab(question.labId, req.user!)) {
+      return res.status(403).json({ message: "You do not have permission to view this question" });
+    }
+
     // Verify student is enrolled
     if (role === "STUDENT") {
+      if (!question.lab.isPublished) {
+        return res.status(403).json({ message: "This laboratory is not published" });
+      }
       const enrollment = await prisma.enrollment.findUnique({
         where: {
           studentId_labId: {
@@ -161,6 +179,7 @@ router.post(
         memoryLimitMb,
         starterCode,
         testCases,
+        attemptsAllowed,
       } = req.body;
 
       if (!title || typeof title !== "string" || !title.trim()) {
@@ -172,12 +191,7 @@ router.post(
       }
 
       // Check lab permission
-      const lab = await prisma.lab.findFirst({
-        where: {
-          id: labId,
-          ...(role === "FACULTY" ? { createdById: userId } : {}),
-        },
-      });
+      const lab = labId ? await findManageableLab(labId, req.user!) : null;
 
       if (!lab) {
         return res.status(404).json({ message: "Lab not found or you lack permission to manage it" });
@@ -197,6 +211,7 @@ router.post(
           marks: Number(marks) || 10,
           timeLimitMs: Number(timeLimitMs) || 2000,
           memoryLimitMb: Number(memoryLimitMb) || 128,
+          attemptsAllowed: Number(attemptsAllowed) > 0 ? Number(attemptsAllowed) : null,
           starterCode: starterCode || null,
           orderIndex: count,
           testCases: Array.isArray(testCases) && testCases.length > 0
@@ -248,6 +263,7 @@ router.put(
         memoryLimitMb,
         starterCode,
         testCases,
+        attemptsAllowed,
       } = req.body;
 
       const question = await prisma.question.findUnique({
@@ -259,7 +275,7 @@ router.put(
         return res.status(404).json({ message: "Question not found" });
       }
 
-      if (role === "FACULTY" && question.lab.createdById !== userId) {
+      if (!await canManageLab(question.labId, req.user!)) {
         return res.status(403).json({ message: "You do not have permission to modify this question" });
       }
 
@@ -291,6 +307,12 @@ router.put(
             marks: marks !== undefined ? Number(marks) : undefined,
             timeLimitMs: timeLimitMs !== undefined ? Number(timeLimitMs) : undefined,
             memoryLimitMb: memoryLimitMb !== undefined ? Number(memoryLimitMb) : undefined,
+            attemptsAllowed:
+              attemptsAllowed !== undefined
+                ? Number(attemptsAllowed) > 0
+                  ? Number(attemptsAllowed)
+                  : null
+                : undefined,
             starterCode: starterCode !== undefined ? starterCode : undefined,
           },
           include: { testCases: true },
@@ -327,7 +349,7 @@ router.delete(
         return res.status(404).json({ message: "Question not found" });
       }
 
-      if (role === "FACULTY" && question.lab.createdById !== userId) {
+      if (!await canManageLab(question.labId, req.user!)) {
         return res.status(403).json({ message: "You do not have permission to delete this question" });
       }
 

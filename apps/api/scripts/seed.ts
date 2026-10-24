@@ -14,7 +14,7 @@ async function main() {
   });
 
   try {
-    console.log("Seeding LabNEXUS institutional data...");
+    console.log("Seeding LabNEXUS with MITS-DU Institutional Data...");
 
     // 1. Departments
     const deptCSBS = await prisma.department.upsert({
@@ -24,6 +24,16 @@ async function main() {
         name: "Computer Science and Business Systems",
         code: "CSBS",
         description: "Department specializing in Computer Science core with business computing and systems",
+      },
+    });
+
+    const deptAIDS = await prisma.department.upsert({
+      where: { code: "AIDS" },
+      update: { name: "Artificial Intelligence & Data Science" },
+      create: {
+        name: "Artificial Intelligence & Data Science",
+        code: "AIDS",
+        description: "Specialized department for AI, Machine Learning, and Big Data Analytics",
       },
     });
 
@@ -37,348 +47,238 @@ async function main() {
       },
     });
 
-    const deptIT = await prisma.department.upsert({
-      where: { code: "IT" },
-      update: { name: "Information Technology" },
-      create: {
-        name: "Information Technology",
-        code: "IT",
-        description: "Network systems, cloud engineering, and web applications",
-      },
-    });
+    console.log("Departments created:", [deptCSBS.code, deptAIDS.code, deptCSE.code]);
 
-    console.log("Departments created:", [deptCSBS.code, deptCSE.code, deptIT.code]);
-
-    // 2. Users
+    // 2. Users & Roles
     const defaultPasswordHash = await bcrypt.hash("NexusPass123!", 12);
     const studentPasswordHash = await bcrypt.hash("StudentPass123!", 12);
     const facultyPasswordHash = await bcrypt.hash("FacultyPass123!", 12);
 
     // VC / Institutional Administrator
     const vcUser = await prisma.user.upsert({
-      where: { email: "vc@labnexus.edu" },
+      where: { email: "vc@mitsgwalior.in" },
       update: {
-        name: "Prof. R. K. Saxena",
+        name: "Prof. R. K. Pandit",
         role: "VICE_CHANCELLOR",
       },
       create: {
-        name: "Prof. R. K. Saxena",
-        email: "vc@labnexus.edu",
+        name: "Prof. R. K. Pandit",
+        email: "vc@mitsgwalior.in",
         passwordHash: defaultPasswordHash,
         role: "VICE_CHANCELLOR",
       },
     });
 
-    // HOD CSBS
+    // HOD AIDS
     const hodUser = await prisma.user.upsert({
-      where: { email: "hod.csbs@labnexus.edu" },
+      where: { email: "hod.aids@mitsgwalior.in" },
       update: {
-        name: "Dr. Sunita Sharma",
+        name: "Dr. Rajni Ranjan Singh Makwana",
         role: "HOD",
-        departmentId: deptCSBS.id,
+        departmentId: deptAIDS.id,
       },
       create: {
-        name: "Dr. Sunita Sharma",
-        email: "hod.csbs@labnexus.edu",
+        name: "Dr. Rajni Ranjan Singh Makwana",
+        email: "hod.aids@mitsgwalior.in",
         passwordHash: defaultPasswordHash,
         role: "HOD",
-        departmentId: deptCSBS.id,
+        departmentId: deptAIDS.id,
       },
     });
 
-    // Faculty CSBS (Demo Faculty)
-    const facultyUser = await prisma.user.upsert({
-      where: { email: "demo.faculty@labnexus.test" },
-      update: {
-        name: "Prof. Vikram Malhotra",
-        role: "FACULTY",
-        departmentId: deptCSBS.id,
-        passwordHash: facultyPasswordHash,
-      },
+    // Faculty CSBS (Multiple Faculty from reference)
+    const facultyJK = await prisma.user.upsert({
+      where: { email: "jk.muthele@mitsgwalior.in" },
+      update: { name: "Prof. J.K. MUTHELE", role: "FACULTY", departmentId: deptCSBS.id },
       create: {
-        name: "Prof. Vikram Malhotra",
-        email: "demo.faculty@labnexus.test",
+        name: "Prof. J.K. MUTHELE",
+        email: "jk.muthele@mitsgwalior.in",
         passwordHash: facultyPasswordHash,
         role: "FACULTY",
         departmentId: deptCSBS.id,
       },
     });
 
-    // Primary Demo Student
-    const primaryStudent = await prisma.user.upsert({
-      where: { email: "demo.student@labnexus.test" },
-      update: {
-        name: "Aarav Sharma",
-        role: "STUDENT",
-        rollNumber: "0901CB221001",
-        departmentId: deptCSBS.id,
-        passwordHash: studentPasswordHash,
-      },
+    const facultyAditi = await prisma.user.upsert({
+      where: { email: "aditi.samadhiya@mitsgwalior.in" },
+      update: { name: "Ms. Aditi Samadhiya", role: "FACULTY", departmentId: deptCSBS.id },
       create: {
-        name: "Aarav Sharma",
-        email: "demo.student@labnexus.test",
-        passwordHash: studentPasswordHash,
-        role: "STUDENT",
-        rollNumber: "0901CB221001",
+        name: "Ms. Aditi Samadhiya",
+        email: "aditi.samadhiya@mitsgwalior.in",
+        passwordHash: facultyPasswordHash,
+        role: "FACULTY",
         departmentId: deptCSBS.id,
       },
     });
 
-    console.log("Core users provisioned (VC, HOD, Faculty, Student)");
+    // Primary Demo Student (Bhumika Pawar)
+    const studentBhumika = await prisma.user.upsert({
+      where: { email: "bhumika.pawar@mitsgwalior.in" },
+      update: {
+        name: "BHUMIKA PAWAR",
+        role: "STUDENT",
+        rollNumber: "0901AD231069",
+        departmentId: deptCSBS.id,
+      },
+      create: {
+        name: "BHUMIKA PAWAR",
+        email: "bhumika.pawar@mitsgwalior.in",
+        passwordHash: studentPasswordHash,
+        role: "STUDENT",
+        rollNumber: "0901AD231069",
+        departmentId: deptCSBS.id,
+      },
+    });
 
-    // 3. Labs
+    // Developer (Vaibhav Sharma)
+    const devVaibhav = await prisma.user.upsert({
+      where: { email: "vaibhav.sharma@mitsgwalior.in" },
+      update: {
+        name: "Vaibhav Sharma",
+        role: "STUDENT",
+        rollNumber: "0901AD231000",
+        departmentId: deptAIDS.id,
+      },
+      create: {
+        name: "Vaibhav Sharma",
+        email: "vaibhav.sharma@mitsgwalior.in",
+        passwordHash: studentPasswordHash,
+        role: "STUDENT",
+        rollNumber: "0901AD231000",
+        departmentId: deptAIDS.id,
+      },
+    });
+
+    console.log("Core users provisioned (VC, HOD, Faculty, Students)");
+
+    // 3. Labs (Courses from reference)
     const dsaLab = await prisma.lab.upsert({
-      where: { enrollmentKey: "DSALAB2026" },
+      where: { enrollmentKey: "DAA2026" },
       update: {
-        title: "Data Structures & Algorithms Laboratory",
-        code: "CSBS-202",
+        title: "DESIGN AND ANALYSIS OF ALGORITHMS",
+        code: "30252102",
         description: "Practical implementations of linear & non-linear data structures, trees, graphs, and algorithmic complexity analysis.",
         language: "C",
         isPublished: true,
         departmentId: deptCSBS.id,
-        createdById: facultyUser.id,
+        createdById: facultyAditi.id,
       },
       create: {
-        title: "Data Structures & Algorithms Laboratory",
-        code: "CSBS-202",
+        title: "DESIGN AND ANALYSIS OF ALGORITHMS",
+        code: "30252102",
         description: "Practical implementations of linear & non-linear data structures, trees, graphs, and algorithmic complexity analysis.",
         language: "C",
-        enrollmentKey: "DSALAB2026",
+        enrollmentKey: "DAA2026",
         isPublished: true,
         departmentId: deptCSBS.id,
-        createdById: facultyUser.id,
+        createdById: facultyAditi.id,
       },
     });
 
     const pythonLab = await prisma.lab.upsert({
-      where: { enrollmentKey: "PYLAB2026" },
+      where: { enrollmentKey: "PYTHON2026" },
       update: {
-        title: "Advanced Python & Scientific Computing",
-        code: "CSBS-301",
+        title: "PROBLEM SOLVING THROUGH PYTHON",
+        code: "30252108",
         description: "Object-oriented scripting, algorithmic design, data parsing, and automated evaluation.",
         language: "PYTHON",
         isPublished: true,
         departmentId: deptCSBS.id,
-        createdById: facultyUser.id,
+        createdById: facultyJK.id,
       },
       create: {
-        title: "Advanced Python & Scientific Computing",
-        code: "CSBS-301",
+        title: "PROBLEM SOLVING THROUGH PYTHON",
+        code: "30252108",
         description: "Object-oriented scripting, algorithmic design, data parsing, and automated evaluation.",
         language: "PYTHON",
-        enrollmentKey: "PYLAB2026",
+        enrollmentKey: "PYTHON2026",
         isPublished: true,
         departmentId: deptCSBS.id,
-        createdById: facultyUser.id,
+        createdById: facultyJK.id,
       },
     });
 
-    // 4. Enroll demo student into both labs
-    await prisma.enrollment.upsert({
-      where: {
-        studentId_labId: {
-          studentId: primaryStudent.id,
-          labId: dsaLab.id,
-        },
+    const networkLab = await prisma.lab.upsert({
+      where: { enrollmentKey: "NETWORKS2026" },
+      update: {
+        title: "COMPUTER NETWORKS",
+        code: "30252103",
+        description: "Network protocols, socket programming, and network simulations.",
+        language: "CPP",
+        isPublished: true,
+        departmentId: deptCSBS.id,
+        createdById: facultyJK.id,
       },
-      update: {},
       create: {
-        studentId: primaryStudent.id,
-        labId: dsaLab.id,
+        title: "COMPUTER NETWORKS",
+        code: "30252103",
+        description: "Network protocols, socket programming, and network simulations.",
+        language: "CPP",
+        enrollmentKey: "NETWORKS2026",
+        isPublished: true,
+        departmentId: deptCSBS.id,
+        createdById: facultyJK.id,
       },
     });
 
-    await prisma.enrollment.upsert({
-      where: {
-        studentId_labId: {
-          studentId: primaryStudent.id,
-          labId: pythonLab.id,
-        },
-      },
-      update: {},
-      create: {
-        studentId: primaryStudent.id,
-        labId: pythonLab.id,
-      },
-    });
-
-    // 5. Questions in DSA Lab
-    const existingQ1 = await prisma.question.findFirst({
-      where: { labId: dsaLab.id, title: "Array Element Search & Index" },
-    });
-
-    const dsaQ1 = existingQ1
-      ? existingQ1
-      : await prisma.question.create({
-          data: {
-            labId: dsaLab.id,
-            title: "Array Element Search & Index",
-            description: "Given an array of integers and a target value, find the 0-based index of the target in the array. If the element is not found, output `-1`.\n\n### Input Format\n- First line contains integer `N` (number of elements)\n- Second line contains `N` space-separated integers\n- Third line contains integer `target`\n\n### Output Format\n- Print the 0-based index or `-1`\n\n### Constraints\n- `1 <= N <= 1000`\n- `-10^5 <= arr[i] <= 10^5`",
-            inputFormat: "N\\nN integers\\ntarget",
-            outputFormat: "Index or -1",
-            constraints: "1 <= N <= 1000",
-            difficulty: "EASY",
-            marks: 10,
-            timeLimitMs: 2000,
-            memoryLimitMb: 128,
-            starterCode: `#include <stdio.h>
-
-int main() {
-    int n;
-    if (scanf("%d", &n) != 1) return 0;
-    int arr[1000];
-    for (int i = 0; i < n; i++) {
-        scanf("%d", &arr[i]);
-    }
-    int target;
-    scanf("%d", &target);
-    
-    // Write your search logic here:
-    
-    return 0;
-}`,
-            orderIndex: 0,
-            testCases: {
-              create: [
-                {
-                  input: "5\n10 20 30 40 50\n30",
-                  expectedOutput: "2",
-                  isHidden: false,
-                  explanation: "30 is located at index 2",
-                  orderIndex: 0,
-                },
-                {
-                  input: "4\n5 12 18 25\n99",
-                  expectedOutput: "-1",
-                  isHidden: false,
-                  explanation: "99 is not in the array",
-                  orderIndex: 1,
-                },
-                {
-                  input: "6\n-5 0 8 15 22 35\n-5",
-                  expectedOutput: "0",
-                  isHidden: true,
-                  explanation: "First element check",
-                  orderIndex: 2,
-                },
-                {
-                  input: "7\n1 3 5 7 9 11 13\n13",
-                  expectedOutput: "6",
-                  isHidden: true,
-                  explanation: "Last element check",
-                  orderIndex: 3,
-                },
-              ],
-            },
-          },
-        });
-
-    // Python Question
-    const existingPyQ = await prisma.question.findFirst({
-      where: { labId: pythonLab.id, title: "Palindromic Word Filter" },
-    });
-
-    const pyQ1 = existingPyQ
-      ? existingPyQ
-      : await prisma.question.create({
-          data: {
-            labId: pythonLab.id,
-            title: "Palindromic Word Filter",
-            description: "Read a sentence from standard input and print all case-insensitive palindromic words separated by a single space. If no palindromic words exist, print `NONE`.\n\n### Input Format\n- A single string sentence.\n\n### Output Format\n- Palindromic words separated by space, or `NONE`.\n\n### Example\n`racecar mom drove fast` -> `racecar mom`",
-            inputFormat: "A single string sentence",
-            outputFormat: "Palindromes separated by space or NONE",
-            constraints: "Sentence length <= 1000 characters",
-            difficulty: "EASY",
-            marks: 10,
-            timeLimitMs: 2000,
-            memoryLimitMb: 128,
-            starterCode: `import sys
-
-def solve():
-    line = sys.stdin.read().strip()
-    if not line:
-        print("NONE")
-        return
-    # Your logic here:
-
-if __name__ == "__main__":
-    solve()
-`,
-            orderIndex: 0,
-            testCases: {
-              create: [
-                {
-                  input: "racecar mom drove fast",
-                  expectedOutput: "racecar mom",
-                  isHidden: false,
-                  explanation: "racecar and mom are palindromes",
-                  orderIndex: 0,
-                },
-                {
-                  input: "hello world python",
-                  expectedOutput: "NONE",
-                  isHidden: false,
-                  explanation: "No palindromes present",
-                  orderIndex: 1,
-                },
-                {
-                  input: "Madam Arora went to noon radar",
-                  expectedOutput: "Madam Arora noon radar",
-                  isHidden: true,
-                  explanation: "Case insensitivity check",
-                  orderIndex: 2,
-                },
-              ],
-            },
-          },
-        });
-
-    // 6. Examination
-    const now = new Date();
-    const examStart = new Date(now.getTime() - 10 * 60 * 1000); // started 10 mins ago
-    const examEnd = new Date(now.getTime() + 120 * 60 * 1000); // ends in 2 hours
-
-    const existingExam = await prisma.examination.findFirst({
-      where: { labId: dsaLab.id, title: "Mid-Term Programming Assessment" },
-    });
-
-    if (!existingExam) {
-      const exam = await prisma.examination.create({
-        data: {
-          labId: dsaLab.id,
-          title: "Mid-Term Programming Assessment",
-          description: "Formal practical examination covering searching, algorithmic logic, and time complexity.",
-          startTime: examStart,
-          endTime: examEnd,
-          durationMinutes: 60,
-          totalMarks: 50,
-          isPublished: true,
-          disableCopyPaste: true,
-          questions: {
-            create: [
-              {
-                questionId: dsaQ1.id,
-                orderIndex: 0,
-              },
-            ],
-          },
-        },
+    // 4. Enroll Bhumika into labs
+    const studentLabs = [dsaLab.id, pythonLab.id, networkLab.id];
+    for (const labId of studentLabs) {
+      await prisma.enrollment.upsert({
+        where: { studentId_labId: { studentId: studentBhumika.id, labId } },
+        update: {},
+        create: { studentId: studentBhumika.id, labId },
       });
-      console.log("Mid-Term Examination created and published:", exam.title);
     }
 
-    // 7. Audit Log
+    // 5. Questions & Exams
+    // (Keeping existing question/exam logic but updating titles/refs)
+    const dsaQ1 = await prisma.question.create({
+      data: {
+        labId: dsaLab.id,
+        title: "Quicksort Implementation",
+        description: "Implement the Quicksort algorithm to sort an array of N integers in ascending order.\n\n### Input Format\n- N (number of elements)\n- N integers\n\n### Output Format\n- Sorted N integers",
+        difficulty: "MEDIUM",
+        marks: 20,
+        testCases: {
+          create: [
+            { input: "5\n5 4 3 2 1", expectedOutput: "1 2 3 4 5", isHidden: false },
+            { input: "6\n10 7 8 9 1 5", expectedOutput: "1 5 7 8 9 10", isHidden: true },
+          ]
+        }
+      }
+    });
+
+    const now = new Date();
+    const examStart = new Date(now.getTime() - 5 * 60 * 1000); // 5 mins ago
+    const examEnd = new Date(now.getTime() + 55 * 60 * 1000); // 55 mins left
+
+    await prisma.examination.create({
+      data: {
+        labId: dsaLab.id,
+        title: "Quiz- VI ( CSBS- A ) III sem.",
+        description: "Numerical Techniques & Algorithmic Analysis Quiz.",
+        startTime: examStart,
+        endTime: examEnd,
+        durationMinutes: 10,
+        totalMarks: 10,
+        isPublished: true,
+        questions: { create: [{ questionId: dsaQ1.id, orderIndex: 0 }] }
+      }
+    });
+
+    // 6. Audit Log
     await prisma.auditLog.create({
       data: {
         userId: vcUser.id,
-        action: "SYSTEM_INITIALIZATION",
-        entity: "INSTITUTION",
-        details: "Academic portal initialized with departments CSBS, CSE, IT and base curriculum.",
+        action: "INSTITUTION_INITIALIZATION",
+        entity: "MITS_DU",
+        details: "MITS-DU Academics Management System portal initialized for CSBS & AIDS departments.",
         ipAddress: "127.0.0.1",
       },
     });
 
-    console.log("Seeding complete successfully!");
+    console.log("MITS-DU Seeding complete successfully!");
   } finally {
     await prisma.$disconnect();
   }

@@ -165,8 +165,8 @@ router.post("/login", async (req: Request, res: Response) => {
   } catch (error) {
     console.error("Login error:", error);
 
-    return res.status(500).json({
-      message: "Something went wrong during login",
+    return res.status(503).json({
+      message: "Sign-in is temporarily unavailable. Check that PostgreSQL is running and the API environment is configured.",
     });
   }
 });

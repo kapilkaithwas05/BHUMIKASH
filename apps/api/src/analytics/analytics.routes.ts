@@ -124,6 +124,9 @@ router.get(
           select: { departmentId: true },
         });
         departmentId = hod?.departmentId || null;
+        if (!departmentId) {
+          return res.status(403).json({ message: "Your account is not assigned to a department" });
+        }
       } else {
         // VC can query any department via query param
         departmentId = (req.query.departmentId as string) || null;

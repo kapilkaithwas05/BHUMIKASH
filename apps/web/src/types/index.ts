@@ -72,6 +72,7 @@ export interface Question {
   marks: number;
   timeLimitMs: number;
   memoryLimitMb: number;
+  attemptsAllowed?: number | null;
   starterCode?: string | null;
   orderIndex: number;
   testCases?: TestCase[];
@@ -143,4 +144,14 @@ export interface Submission {
   executionTimeMs?: number | null;
   testResults?: SubmissionTestResult[];
   submittedAt: string;
+}
+
+export interface Notification {
+  id: string;
+  userId: string;
+  title: string;
+  message: string;
+  type: "INFO" | "ENROLLMENT" | "SUBMISSION" | "EXAM" | "WARNING" | "SYSTEM";
+  isRead: boolean;
+  createdAt: string;
 }

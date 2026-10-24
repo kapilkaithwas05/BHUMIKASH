@@ -105,15 +105,17 @@ export const ExaminationResults: React.FC = () => {
                       className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${
                         r.status === "SUBMITTED"
                           ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                          : r.status === "PENDING"
+                          ? "bg-amber-50 text-amber-700 border border-amber-200"
                           : "bg-slate-100 text-slate-600"
                       }`}
                     >
-                      {r.status === "SUBMITTED" ? "Submitted" : "Not Attempted"}
+                      {r.status === "SUBMITTED" ? "Submitted" : r.status === "PENDING" ? "Awaiting evaluation" : "Not Attempted"}
                     </span>
                   </td>
                   <td className="py-4 px-6 font-semibold">{r.submissions.length} Questions</td>
                   <td className="py-4 px-6 text-right font-bold text-slate-900">
-                    {r.totalScore} / {data.examination.totalMarks}
+                    {r.status === "PENDING" ? "Pending" : `${r.totalScore} / ${data.examination.totalMarks}`}
                   </td>
                 </tr>
               ))}

@@ -1,6 +1,8 @@
 import express from "express";
 import cors from "cors";
 import multer from "multer";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 
 import prisma from "./lib/prisma";
 import authRoutes from "./auth/auth.routes";
@@ -10,16 +12,54 @@ import submissionRoutes from "./submissions/submission.routes";
 import examinationRoutes from "./examinations/examination.routes";
 import analyticsRoutes from "./analytics/analytics.routes";
 import amsRoutes from "./ams/ams.routes";
+import notificationRoutes from "./notifications/notification.routes";
 
 import { authenticateToken, AuthenticatedRequest } from "./middleware/auth.middleware";
-import { authorizeRoles } from "./middleware/role.middleware";
 
 const app = express();
 
-app.use(cors({
-  origin: true,
-  credentials: true,
-}));
+// ── Security headers ─────────────────────────────────────────────────────────
+app.use(helmet());
+
+// ── CORS ─────────────────────────────────────────────────────────────────────
+const allowedOrigins = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(",").map((o) => o.trim())
+  : true; // allow any origin in development if CORS_ORIGIN not set
+
+app.use(
+  cors({
+    origin: allowedOrigins,
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
+);
+
+// ── Rate limiting ─────────────────────────────────────────────────────────────
+// Strict limiter for auth endpoints (brute-force protection)
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20,                   // 20 attempts per window
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    message: "Too many authentication attempts. Please try again in 15 minutes.",
+  },
+});
+
+// General API limiter
+const apiLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 200,                 // 200 requests/minute per IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Too many requests. Please slow down." },
+});
+
+app.use("/api/auth", authLimiter);
+app.use("/api", apiLimiter);
+
+// ── Body parsing ──────────────────────────────────────────────────────────────
 app.use(express.json({ limit: "5mb" }));
 
 // Route handlers
@@ -42,6 +82,9 @@ app.use("/api/analytics", analyticsRoutes);
 
 // AMS Integration
 app.use("/api/ams", amsRoutes);
+
+// Notifications
+app.use("/api/notifications", notificationRoutes);
 
 // Health check endpoints
 app.get("/", (_req, res) => {
@@ -144,6 +187,31 @@ app.use(
     }
 
     return next(error);
+  }
+);
+
+// ── Global error handler (must be last middleware) ────────────────────────────
+app.use(
+  (
+    error: Error,
+    _req: express.Request,
+    res: express.Response,
+    _next: express.NextFunction
+  ) => {
+    console.error("[Unhandled Error]", error);
+
+    // Don't expose stack traces to clients
+    const statusCode =
+      (error as any).statusCode ||
+      (error as any).status ||
+      500;
+
+    res.status(statusCode).json({
+      message:
+        process.env.NODE_ENV === "production"
+          ? "An unexpected error occurred"
+          : error.message || "Internal Server Error",
+    });
   }
 );
 

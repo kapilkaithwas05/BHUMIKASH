@@ -54,8 +54,34 @@ export class ExecutionService {
 
   /**
    * Executes untrusted code inside an isolated temporary directory with strict time limits.
+   *
+   * Cold-start tolerance: the first spawns of a compiler/runtime and of a freshly written
+   * binary after an idle period can take several seconds on a shared Windows host (antivirus
+   * scanning of new executables). That latency is host overhead, not student code runtime, and
+   * it must not be reported as a wrong TIME_LIMIT_EXCEEDED verdict. A timed-out attempt is
+   * therefore re-run once with a widened budget; genuinely slow or non-terminating programs
+   * still report TIME_LIMIT_EXCEEDED.
    */
   public static async execute(options: ExecutionOptions): Promise<ExecutionResult> {
+    const timeLimitMs = options.timeLimitMs || 2000;
+    const firstAttempt = await this.executeOnce(options);
+
+    if (firstAttempt.status === "TIME_LIMIT_EXCEEDED") {
+      const graceLimitMs = Math.max(timeLimitMs * 3, timeLimitMs + 4000);
+      const retryAttempt = await this.executeOnce({
+        ...options,
+        timeLimitMs: graceLimitMs,
+      });
+
+      if (retryAttempt.status !== "TIME_LIMIT_EXCEEDED") {
+        return retryAttempt;
+      }
+    }
+
+    return firstAttempt;
+  }
+
+  private static async executeOnce(options: ExecutionOptions): Promise<ExecutionResult> {
     const timeLimitMs = options.timeLimitMs || 2000;
     const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "labnexus-exec-"));
 
@@ -119,7 +145,7 @@ export class ExecutionService {
     await fs.writeFile(srcPath, sourceCode, "utf8");
 
     // 1. Compile with gcc
-    const compileRes = await this.runProcess("gcc", ["-O2", "-Wall", srcPath, "-o", outExe], "", tempDir, 8000);
+    const compileRes = await this.runCompile("gcc", ["-O2", "-Wall", srcPath, "-o", outExe], tempDir);
     if (compileRes.status !== "ACCEPTED") {
       return {
         status: "COMPILATION_ERROR",
@@ -145,7 +171,7 @@ export class ExecutionService {
     await fs.writeFile(srcPath, sourceCode, "utf8");
 
     // 1. Compile with g++
-    const compileRes = await this.runProcess("g++", ["-O2", "-Wall", srcPath, "-o", outExe], "", tempDir, 8000);
+    const compileRes = await this.runCompile("g++", ["-O2", "-Wall", srcPath, "-o", outExe], tempDir);
     if (compileRes.status !== "ACCEPTED") {
       return {
         status: "COMPILATION_ERROR",
@@ -170,7 +196,7 @@ export class ExecutionService {
     await fs.writeFile(srcPath, sourceCode, "utf8");
 
     // Compile with javac
-    const compileRes = await this.runProcess("javac", [srcPath], "", tempDir, 8000);
+    const compileRes = await this.runCompile("javac", [srcPath], tempDir);
     if (compileRes.status !== "ACCEPTED") {
       return {
         status: "COMPILATION_ERROR",
@@ -182,6 +208,26 @@ export class ExecutionService {
     }
 
     return this.runProcess("java", ["-cp", tempDir, "Main"], stdin, tempDir, timeLimitMs);
+  }
+
+  /**
+   * Compiles a source file with a fixed budget, retrying once with a wider budget if the
+   * first attempt times out. The first cold invocation of a toolchain (gcc/g++/javac) on a
+   * shared Windows host can be slowed down by antivirus scanning of the freshly written
+   * problem, which must not be reported to the student as a compilation error in their code.
+   */
+  private static async runCompile(
+    command: string,
+    args: string[],
+    cwd: string
+  ): Promise<ExecutionResult> {
+    const compileRes = await this.runProcess(command, args, "", cwd, 8000);
+
+    if (compileRes.status === "TIME_LIMIT_EXCEEDED") {
+      return this.runProcess(command, args, "", cwd, 25000);
+    }
+
+    return compileRes;
   }
 
   private static runProcess(

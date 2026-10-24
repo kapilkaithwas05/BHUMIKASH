@@ -49,45 +49,53 @@ model Department {
 }
 
 model User {
-  id             String       @id @default(cuid())
+  id             String         @id @default(cuid())
   name           String
-  email          String       @unique
+  email          String         @unique
   passwordHash   String
-  role           Role         @default(STUDENT)
+  role           Role           @default(STUDENT)
   rollNumber     String?
   departmentId   String?
-  department     Department?  @relation(fields: [departmentId], references: [id], onDelete: SetNull)
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  department     Department?    @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
 
-  createdLabs    Lab[]        @relation("LabCreator")
-  labEnrollments Enrollment[] @relation("StudentEnrollments")
+  createdLabs    Lab[]          @relation("LabCreator")
+  labEnrollments Enrollment[]   @relation("StudentEnrollments")
   submissions    Submission[]
+  notifications  Notification[]
   auditLogs      AuditLog[]
+
+  @@index([departmentId])
+  @@index([role])
 }
 
 model Lab {
-  id            String       @id @default(cuid())
+  id            String         @id @default(cuid())
   title         String
   code          String?
   description   String?
   language      LabLanguage
-  enrollmentKey String?      @unique
-  isPublished   Boolean      @default(false)
+  enrollmentKey String?        @unique
+  isPublished   Boolean        @default(false)
 
   departmentId  String?
-  department    Department?  @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  department    Department?    @relation(fields: [departmentId], references: [id], onDelete: SetNull)
 
   createdById   String
-  createdBy     User         @relation("LabCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  createdBy     User           @relation("LabCreator", fields: [createdById], references: [id], onDelete: Restrict)
 
   enrollments   Enrollment[]
   questions     Question[]
   examinations  Examination[]
   submissions   Submission[]
 
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@index([departmentId])
+  @@index([createdById])
+  @@index([isPublished])
 }
 
 model Enrollment {
@@ -101,6 +109,8 @@ model Enrollment {
   enrolledAt DateTime @default(now())
 
   @@unique([studentId, labId])
+  @@index([studentId])
+  @@index([labId])
 }
 
 model Question {
@@ -116,6 +126,7 @@ model Question {
   marks                Int                   @default(10)
   timeLimitMs          Int                   @default(2000)
   memoryLimitMb        Int                   @default(128)
+  attemptsAllowed      Int?
   starterCode          String?
   orderIndex           Int                   @default(0)
 
@@ -125,6 +136,9 @@ model Question {
 
   createdAt            DateTime              @default(now())
   updatedAt            DateTime              @updatedAt
+
+  @@index([labId])
+  @@index([orderIndex])
 }
 
 model TestCase {
@@ -138,6 +152,9 @@ model TestCase {
   orderIndex     Int                    @default(0)
 
   results        SubmissionTestResult[]
+
+  @@index([questionId])
+  @@index([orderIndex])
 }
 
 model Examination {
@@ -158,6 +175,10 @@ model Examination {
 
   createdAt        DateTime              @default(now())
   updatedAt        DateTime              @updatedAt
+
+  @@index([labId])
+  @@index([startTime, endTime])
+  @@index([isPublished])
 }
 
 model ExaminationQuestion {
@@ -170,6 +191,8 @@ model ExaminationQuestion {
   question      Question    @relation(fields: [questionId], references: [id], onDelete: Cascade)
 
   @@unique([examinationId, questionId])
+  @@index([examinationId])
+  @@index([questionId])
 }
 
 model Submission {
@@ -195,6 +218,13 @@ model Submission {
   testResults    SubmissionTestResult[]
 
   submittedAt    DateTime               @default(now())
+
+  @@index([studentId])
+  @@index([labId])
+  @@index([questionId])
+  @@index([examinationId])
+  @@index([submittedAt])
+  @@index([status])
 }
 
 model SubmissionTestResult {
@@ -208,6 +238,23 @@ model SubmissionTestResult {
   status          SubmissionStatus
   actualOutput    String?
   executionTimeMs Int?
+
+  @@index([submissionId])
+  @@index([testCaseId])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  message   String
+  type      String   @default("INFO")
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
 }
 
 model AuditLog {
@@ -220,4 +267,8 @@ model AuditLog {
   details   String?
   ipAddress String?
   createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+  @@index([action])
 }

@@ -4,6 +4,7 @@ import { authorizeRoles } from "../middleware/role.middleware";
 import { AMSIntegrationService } from "./ams.service";
 import prisma from "../lib/prisma";
 import { getParam } from "../lib/params";
+import { canManageLab } from "../lib/access";
 
 const router = Router();
 const amsService = AMSIntegrationService.getInstance();
@@ -36,6 +37,10 @@ router.get(
 
       if (!lab) {
         return res.status(404).json({ message: "Lab not found" });
+      }
+
+      if (!await canManageLab(labId, req.user!)) {
+        return res.status(403).json({ message: "You do not have permission to view this lab report" });
       }
 
       const report = await amsService.getLabAttendanceSummary(lab.code || lab.title);

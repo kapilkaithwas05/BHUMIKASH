@@ -24,15 +24,25 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     headers["Authorization"] = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_BASE}${endpoint}`, {
-    ...options,
-    headers,
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${endpoint}`, {
+      ...options,
+      headers,
+    });
+  } catch {
+    throw new Error("Cannot reach the LabNEXUS API. Start the backend with `npm.cmd run dev:api` and try again.");
+  }
 
-  const data = await response.json().catch(() => ({}));
+  const contentType = response.headers.get("content-type") || "";
+  const data = contentType.includes("application/json")
+    ? await response.json().catch(() => ({}))
+    : {};
 
   if (!response.ok) {
-    const errorMsg = data.message || `Request failed with status ${response.status}`;
+    const errorMsg = data.message || (response.status >= 500
+      ? "The LabNEXUS API could not complete this request. Check that the backend and database are running."
+      : `Request failed with status ${response.status}`);
     throw new Error(errorMsg);
   }
 
@@ -251,5 +261,22 @@ export const api = {
 
   async getAMSReport(labId: string): Promise<any> {
     return request(`/ams/labs/${labId}/report`);
+  },
+
+  // Notifications
+  async getNotifications(): Promise<{ notifications: any[]; unreadCount: number }> {
+    return request("/notifications");
+  },
+
+  async markNotificationRead(id: string): Promise<{ notification: any }> {
+    return request(`/notifications/${id}/read`, { method: "PUT" });
+  },
+
+  async markAllNotificationsRead(): Promise<{ message: string }> {
+    return request("/notifications/read-all", { method: "PUT" });
+  },
+
+  async deleteNotification(id: string): Promise<{ message: string }> {
+    return request(`/notifications/${id}`, { method: "DELETE" });
   },
 };

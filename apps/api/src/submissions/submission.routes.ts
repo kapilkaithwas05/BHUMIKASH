@@ -4,68 +4,16 @@ import {
   authenticateToken,
   AuthenticatedRequest,
 } from "../middleware/auth.middleware";
-import { ExecutionService, SupportedLanguage } from "../services/execution.service";
-import { EvaluationService } from "../services/evaluation.service";
 import { getParam } from "../lib/params";
 
 const router = Router({ mergeParams: true });
 
 /* POST /api/questions/:questionId/run */
 router.post("/:questionId/run", authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    const questionId = getParam(req.params.questionId);
-    const { sourceCode, language: reqLang, customInput } = req.body;
-
-    if (!questionId) {
-      return res.status(400).json({ message: "Question ID is required" });
-    }
-
-    if (!sourceCode || typeof sourceCode !== "string") {
-      return res.status(400).json({ message: "Source code is required" });
-    }
-
-    const question = await prisma.question.findUnique({
-      where: { id: questionId },
-      include: {
-        lab: true,
-        testCases: {
-          where: { isHidden: false },
-          take: 1,
-          orderBy: { orderIndex: "asc" },
-        },
-      },
-    });
-
-    if (!question) {
-      return res.status(404).json({ message: "Question not found" });
-    }
-
-    const language: SupportedLanguage = (reqLang || question.lab.language) as SupportedLanguage;
-    const stdin = typeof customInput === "string"
-      ? customInput
-      : question.testCases[0]?.input || "";
-
-    const result = await ExecutionService.execute({
-      language,
-      sourceCode,
-      stdin,
-      timeLimitMs: question.timeLimitMs || 2000,
-      memoryLimitMb: question.memoryLimitMb || 128,
-    });
-
-    return res.status(200).json({
-      language,
-      status: result.status,
-      stdout: result.stdout,
-      stderr: result.stderr,
-      compileOutput: result.compileOutput,
-      executionTimeMs: result.executionTimeMs,
-      usedInput: stdin,
-    });
-  } catch (error: any) {
-    console.error("Code run error:", error);
-    return res.status(500).json({ message: "Could not execute code: " + error.message });
-  }
+  return res.status(503).json({
+    message: "Code execution is unavailable until an isolated execution service is configured.",
+    code: "EXECUTION_SANDBOX_UNAVAILABLE",
+  });
 });
 
 /* POST /api/questions/:questionId/submit */
@@ -97,6 +45,10 @@ router.post("/:questionId/submit", authenticateToken, async (req: AuthenticatedR
       return res.status(404).json({ message: "Question not found" });
     }
 
+    if (role !== "STUDENT") {
+      return res.status(403).json({ message: "Only students can submit solutions" });
+    }
+
     // Verify enrollment
     if (role === "STUDENT") {
       const enrollment = await prisma.enrollment.findUnique({
@@ -113,119 +65,147 @@ router.post("/:questionId/submit", authenticateToken, async (req: AuthenticatedR
       }
     }
 
-    // Examination rules verification
-    if (examinationId && typeof examinationId === "string") {
+    // Attempt limit enforcement
+    if (role === "STUDENT" && question.attemptsAllowed !== null) {
+      const attemptsUsed = await prisma.submission.count({
+        where: { studentId: userId, questionId: question.id },
+      });
+
+      if (attemptsUsed >= question.attemptsAllowed) {
+        return res.status(403).json({
+          message: `Attempt limit reached. You have used all ${question.attemptsAllowed} allowed attempt(s) for this question.`,
+        });
+      }
+    }
+
+    // Examination rules verification.
+    // A question can belong to one or more published assessments, and those windows must be
+    // enforced even when the client omits examinationId. Otherwise a closed assessment could
+    // be bypassed by submitting the question as ordinary lab practice, and a submission made
+    // during an open assessment would be silently left unlinked from it.
+    const now = new Date();
+    const EXAM_END_BUFFER_MS = 30 * 1000;
+
+    const getWindowError = (examination: { startTime: Date; endTime: Date }) => {
+      if (now < examination.startTime) {
+        return "Examination has not started yet";
+      }
+
+      // Add a 30-second network buffer to endTime
+      if (now > new Date(examination.endTime.getTime() + EXAM_END_BUFFER_MS)) {
+        return "Assessment deadline has passed. Submissions are no longer accepted.";
+      }
+
+      return null;
+    };
+
+    let effectiveExaminationId: string | null =
+      typeof examinationId === "string" ? examinationId : null;
+
+    if (effectiveExaminationId) {
       const examination = await prisma.examination.findUnique({
-        where: { id: examinationId },
+        where: { id: effectiveExaminationId },
       });
 
       if (!examination) {
         return res.status(404).json({ message: "Examination not found" });
       }
 
+      if (examination.labId !== question.labId) {
+        return res.status(400).json({ message: "The question does not belong to this assessment's lab" });
+      }
+
+      const includedQuestion = await prisma.examinationQuestion.findFirst({
+        where: { examinationId: effectiveExaminationId, questionId },
+        select: { questionId: true },
+      });
+      if (!includedQuestion) {
+        return res.status(400).json({ message: "This question is not part of the selected assessment" });
+      }
+
       if (!examination.isPublished) {
         return res.status(403).json({ message: "Examination is not published" });
       }
 
-      const now = new Date();
-      if (now < examination.startTime) {
-        return res.status(403).json({ message: "Examination has not started yet" });
+      const windowError = getWindowError(examination);
+      if (windowError) {
+        return res.status(403).json({ message: windowError });
       }
+    } else if (role === "STUDENT") {
+      const publishedAssessments = await prisma.examinationQuestion.findMany({
+        where: { questionId, examination: { isPublished: true } },
+        include: { examination: true },
+      });
 
-      // Add a 30-second network buffer to endTime
-      const maxEndTime = new Date(examination.endTime.getTime() + 30 * 1000);
-      if (now > maxEndTime) {
-        return res.status(403).json({
-          message: "Assessment deadline has passed. Submissions are no longer accepted.",
-        });
+      if (publishedAssessments.length > 0) {
+        const openAssessment = publishedAssessments.find(
+          ({ examination }) => getWindowError(examination) === null
+        );
+
+        if (!openAssessment) {
+          return res.status(403).json({
+            message:
+              "This question belongs to an assessment that is not currently open. Submissions are only accepted during the assessment window.",
+          });
+        }
+
+        effectiveExaminationId = openAssessment.examinationId;
       }
     }
 
-    const language: SupportedLanguage = (reqLang || question.lab.language) as SupportedLanguage;
+    const language = (reqLang || question.lab.language) as "C" | "CPP" | "JAVA" | "PYTHON";
+    if (!["C", "CPP", "JAVA", "PYTHON"].includes(language)) {
+      return res.status(400).json({ message: "Unsupported programming language" });
+    }
 
-    // Run evaluation against all test cases
-    const evaluation = await EvaluationService.evaluate(
-      language,
-      sourceCode,
-      question.testCases,
-      {
-        timeLimitMs: question.timeLimitMs || 2000,
-        memoryLimitMb: question.memoryLimitMb || 128,
-        maxMarks: question.marks || 10,
-        maskHiddenTests: role === "STUDENT",
-      }
-    );
-
-    // Save submission to database
+    // Preserve the student's work while evaluation remains unavailable. Never run untrusted
+    // submissions in the API process or on the host without an isolated execution service.
     const submission = await prisma.submission.create({
       data: {
         studentId: userId,
         labId: question.labId,
         questionId: question.id,
-        examinationId: examinationId || null,
-        language: language as any,
+        examinationId: effectiveExaminationId,
+        language,
         sourceCode,
-        status: evaluation.status as any,
-        compileOutput: evaluation.compileOutput || null,
-        score: evaluation.score,
-        totalTests: evaluation.totalTests,
-        passedTests: evaluation.passedTests,
-        executionTimeMs: evaluation.executionTimeMs,
-        testResults: {
-          create: evaluation.testResults.map((tr) => ({
-            testCaseId: tr.testCaseId,
-            passed: tr.passed,
-            status: tr.status as any,
-            actualOutput: tr.actualOutput || null,
-            executionTimeMs: tr.executionTimeMs,
-          })),
-        },
-      },
-      include: {
-        testResults: {
-          include: {
-            testCase: {
-              select: {
-                id: true,
-                input: true,
-                expectedOutput: true,
-                isHidden: true,
-                explanation: true,
-              },
-            },
-          },
-        },
+        status: "PENDING",
+        score: 0,
+        totalTests: question.testCases.length,
+        passedTests: 0,
       },
     });
 
-    // Mask hidden test cases from student response
-    const sanitizedTestResults = submission.testResults.map((tr) => {
-      if (role === "STUDENT" && tr.testCase.isHidden) {
-        return {
-          id: tr.id,
-          passed: tr.passed,
-          status: tr.status,
-          executionTimeMs: tr.executionTimeMs,
-          testCase: {
-            id: tr.testCase.id,
-            isHidden: true,
-            explanation: tr.testCase.explanation,
-          },
-        };
-      }
-      return tr;
-    });
+    try {
+      const submitter = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { name: true },
+      });
+      const notifications = [
+        {
+          userId,
+          title: "Submission received",
+          message: `"${question.title}" was submitted and is awaiting evaluation.`,
+          type: "SUBMISSION",
+        },
+        {
+          userId: question.lab.createdById,
+          title: "New code submission",
+          message: `${submitter?.name || "A student"} submitted "${question.title}" in ${question.lab.title}. Evaluation is pending.`,
+          type: "SUBMISSION",
+        },
+      ];
+      await prisma.notification.createMany({ data: notifications });
+    } catch (notifyError) {
+      console.error("Submission notification failed:", notifyError);
+    }
 
     return res.status(201).json({
-      message: "Submission evaluated successfully",
-      submission: {
-        ...submission,
-        testResults: sanitizedTestResults,
-      },
+      message: "Submission saved and is awaiting evaluation",
+      submission,
     });
   } catch (error: any) {
-    console.error("Submission evaluation error:", error);
-    return res.status(500).json({ message: "Could not evaluate submission: " + error.message });
+    console.error("Submission save error:", error);
+    return res.status(500).json({ message: "Could not save submission" });
   }
 });
 
@@ -246,6 +226,23 @@ router.get("/:questionId/submissions", authenticateToken, async (req: Authentica
 
     if (!question) {
       return res.status(404).json({ message: "Question not found" });
+    }
+
+    if (role === "FACULTY" && question.lab.createdById !== userId) {
+      return res.status(403).json({ message: "You may only review submissions for your own labs" });
+    }
+    if (role === "HOD") {
+      const hod = await prisma.user.findUnique({ where: { id: userId }, select: { departmentId: true } });
+      const lab = await prisma.lab.findUnique({
+        where: { id: question.labId },
+        select: { departmentId: true, createdBy: { select: { departmentId: true } } },
+      });
+      const hasDepartmentAccess = Boolean(hod?.departmentId && lab && (
+        lab.departmentId === hod.departmentId || lab.createdBy.departmentId === hod.departmentId
+      ));
+      if (!hasDepartmentAccess) {
+        return res.status(403).json({ message: "You may only review submissions in your department" });
+      }
     }
 
     const submissions = await prisma.submission.findMany({

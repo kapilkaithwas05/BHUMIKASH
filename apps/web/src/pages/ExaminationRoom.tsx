@@ -15,6 +15,8 @@ import {
   ArrowLeft,
   Terminal,
   FileCode,
+  Trophy,
+  Clock,
 } from "lucide-react";
 
 export const ExaminationRoom: React.FC = () => {
@@ -132,57 +134,81 @@ export const ExaminationRoom: React.FC = () => {
     }
   };
 
-  if (loading) return <div className="p-8 text-center text-slate-500">Entering Examination Room...</div>;
-  if (!examination) return <div className="p-8 text-center text-slate-500">Examination not found or not published.</div>;
+  if (loading) return (
+    <div className="flex flex-col items-center justify-center min-h-screen bg-slate-950 gap-4">
+      <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+      <span className="text-sm font-black text-slate-500 uppercase tracking-[0.3em]">Establishing Secure Session...</span>
+    </div>
+  );
+
+  if (!examination) return (
+    <div className="flex flex-col items-center justify-center min-h-screen bg-slate-950 p-8 text-center">
+      <AlertTriangle className="w-16 h-16 text-rose-500 mb-6" />
+      <h2 className="text-3xl font-black text-white uppercase tracking-tight">Access Restricted</h2>
+      <p className="text-slate-500 mt-2 max-w-md">This assessment is either unavailable, expired, or you do not have permission to enter.</p>
+      <Link to="/" className="btn-primary mt-8 inline-flex">Return to Portal</Link>
+    </div>
+  );
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] bg-slate-900 text-slate-100 overflow-hidden">
-      {/* Assessment Header with Synchronized Timer */}
-      <div className="h-16 bg-slate-950 border-b border-slate-800 px-6 flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-3">
-          <Link
-            to={`/labs/${examination.labId}`}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition-colors"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </Link>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-sm text-slate-100">{examination.title}</span>
-              {examination.disableCopyPaste && (
-                <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded bg-rose-950/70 text-rose-300 border border-rose-800">
-                  <Lock className="w-3 h-3" /> Copy-Paste Guarded
-                </span>
-              )}
+    <div className="flex flex-col h-screen bg-slate-900 text-slate-100 overflow-hidden">
+      {/* Secure Header with MITS-DU Branding */}
+      <div className="h-16 bg-slate-950 border-b border-slate-800 px-6 flex items-center justify-between shrink-0 shadow-2xl z-50">
+        <div className="flex items-center gap-6">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-lg shadow-indigo-500/20">
+              <ShieldAlert className="w-6 h-6" />
             </div>
-            <span className="text-xs text-slate-500">Total Marks: {examination.totalMarks} Points</span>
+            <div>
+              <div className="flex items-center gap-2">
+              <span className="font-black text-lg text-white tracking-tighter uppercase">Assessment Room</span>
+                <span className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-rose-950/50 text-rose-400 border border-rose-900/50">
+                  ACTIVE
+                </span>
+              </div>
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest leading-none mt-1">
+                {examination.title}
+              </p>
+            </div>
           </div>
         </div>
 
-        {/* Live Synchronized Countdown Timer */}
-        <div className="flex items-center gap-4">
+        {/* Live Synchronized Countdown Timer - Prominent MITS Style */}
+        <div className="flex items-center gap-4 bg-slate-900/50 px-6 py-2 rounded-2xl border border-slate-800">
           <div className="text-right hidden sm:block">
-            <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Remaining Time</span>
+            <p className="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em]">Session Closes In</p>
           </div>
-          <Timer
-            endTime={examination.endTime}
-            serverTime={serverTime}
-            onExpire={() => setIsExamEnded(true)}
-          />
+          <div className="font-mono text-2xl font-black text-indigo-400 tracking-wider">
+            <Timer
+              endTime={examination.endTime}
+              serverTime={serverTime}
+              onExpire={() => setIsExamEnded(true)}
+            />
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <div className="hidden lg:block text-right">
+            <p className="text-[10px] font-black text-slate-400 uppercase leading-none">MITS-DU Official</p>
+            <p className="text-[9px] font-bold text-slate-600 uppercase mt-1">Academics Management</p>
+          </div>
+          <div className="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400">
+            <Lock className="w-5 h-5" />
+          </div>
         </div>
       </div>
 
-      {/* Copy-Paste Warning Toast */}
+      {/* Copy-Paste Warning Toast - Elegant Portal Style */}
       {pasteWarning && (
-        <div className="bg-rose-600 text-white text-xs font-semibold py-2 px-4 text-center flex items-center justify-center gap-2 animate-in slide-in-from-top">
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[100] bg-rose-600 text-white text-[11px] font-black uppercase tracking-widest py-3 px-8 rounded-2xl shadow-2xl shadow-rose-500/30 flex items-center gap-3 animate-in fade-in slide-in-from-top-4">
           <ShieldAlert className="w-4 h-4" />
-          <span>Copy-paste is restricted during this examination session. Please type your solution manually.</span>
+          <span>Security Violation: Copy-Paste is strictly prohibited.</span>
         </div>
       )}
 
-      {/* Question Selector Tabs */}
-      <div className="bg-slate-900 border-b border-slate-800 px-6 flex items-center justify-between shrink-0">
-        <div className="flex space-x-2 py-2 overflow-x-auto">
+      {/* Workspace Controls */}
+      <div className="bg-slate-900 border-b border-slate-800 px-6 h-14 flex items-center justify-between shrink-0">
+        <div className="flex gap-2 overflow-x-auto no-scrollbar">
           {examination.questions?.map((item, idx) => {
             const isSelected = idx === currentQIndex;
             const isSub = Boolean(submittedQuestions[item.question.id]);
@@ -190,35 +216,28 @@ export const ExaminationRoom: React.FC = () => {
               <button
                 key={item.question.id}
                 onClick={() => setCurrentQIndex(idx)}
-                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
                   isSelected
-                    ? "bg-indigo-600 text-white"
-                    : "bg-slate-800 text-slate-300 hover:bg-slate-700"
+                    ? "bg-white text-indigo-600 shadow-lg shadow-indigo-500/10 scale-105"
+                    : "bg-slate-800/50 text-slate-500 hover:text-slate-300 hover:bg-slate-800"
                 }`}
               >
-                <span>Q{idx + 1}: {item.question.title}</span>
-                {isSub && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-300" />}
+                <span>Q{idx + 1}</span>
+                {isSub && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />}
               </button>
             );
           })}
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleRunCode}
-            disabled={isRunning || isExamEnded}
-            className="flex items-center gap-1.5 px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-xs font-semibold border border-slate-700 disabled:opacity-50"
-          >
-            <Play className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Test Run</span>
-          </button>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-slate-400" title="An isolated execution service is not configured">Execution unavailable</span>
           <button
             onClick={handleSubmitQuestion}
             disabled={isSubmitting || isExamEnded}
-            className="flex items-center gap-1.5 px-3.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-semibold disabled:opacity-50"
+            className="flex items-center gap-2 px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-emerald-500/20 disabled:opacity-50 transition-all active:scale-95"
           >
             <Send className="w-3.5 h-3.5" />
-            <span>Submit Solution</span>
+            <span>Final Submit</span>
           </button>
         </div>
       </div>
@@ -226,42 +245,51 @@ export const ExaminationRoom: React.FC = () => {
       {/* Main Workspace Body */}
       {activeQuestion ? (
         <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 overflow-hidden">
-          {/* Left: Problem Details */}
-          <div className="lg:col-span-5 border-r border-slate-800 bg-slate-950 p-6 overflow-y-auto space-y-4 text-xs">
-            <h2 className="text-base font-bold text-slate-100">{activeQuestion.title}</h2>
-            <div className="text-slate-300 whitespace-pre-wrap leading-relaxed">{activeQuestion.description}</div>
-
-            {activeQuestion.inputFormat && (
-              <div className="p-3 bg-slate-900 border border-slate-800 rounded-lg">
-                <span className="font-bold text-indigo-400 block mb-1">Input Format:</span>
-                <span className="font-mono text-slate-300">{activeQuestion.inputFormat}</span>
+          {/* Left: Problem Details - Portal Style */}
+          <div className="lg:col-span-4 border-r border-slate-800 bg-slate-950 p-8 overflow-y-auto space-y-8">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-black text-indigo-500 uppercase tracking-[0.2em]">Active Challenge</span>
+                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{activeQuestion.marks} Points</span>
               </div>
-            )}
+              <h2 className="text-3xl font-black text-white uppercase tracking-tighter leading-none">{activeQuestion.title}</h2>
+              <div className="h-1 w-12 bg-indigo-600 rounded-full" />
+            </div>
 
-            {activeQuestion.outputFormat && (
-              <div className="p-3 bg-slate-900 border border-slate-800 rounded-lg">
-                <span className="font-bold text-indigo-400 block mb-1">Output Format:</span>
-                <span className="font-mono text-slate-300">{activeQuestion.outputFormat}</span>
-              </div>
-            )}
+            <div className="text-slate-400 text-sm font-medium leading-relaxed whitespace-pre-wrap font-sans">
+              {activeQuestion.description}
+            </div>
 
-            {activeQuestion.constraints && (
-              <div className="p-3 bg-slate-900 border border-slate-800 rounded-lg">
-                <span className="font-bold text-amber-400 block mb-1">Constraints:</span>
-                <span className="font-mono text-slate-300">{activeQuestion.constraints}</span>
-              </div>
-            )}
+            <div className="space-y-4 pt-4">
+              {activeQuestion.inputFormat && (
+                <div className="p-4 bg-slate-900 rounded-2xl border border-slate-800 space-y-2">
+                  <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest block">Input Format</span>
+                  <p className="font-mono text-[11px] text-slate-300 leading-relaxed">{activeQuestion.inputFormat}</p>
+                </div>
+              )}
+
+              {activeQuestion.outputFormat && (
+                <div className="p-4 bg-slate-900 rounded-2xl border border-slate-800 space-y-2">
+                  <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest block">Output Format</span>
+                  <p className="font-mono text-[11px] text-slate-300 leading-relaxed">{activeQuestion.outputFormat}</p>
+                </div>
+              )}
+            </div>
 
             {/* Test cases */}
             {activeQuestion.testCases && activeQuestion.testCases.length > 0 && (
-              <div className="space-y-2 pt-2">
-                <span className="font-bold text-slate-400 uppercase tracking-wider text-[10px]">Sample Test Cases</span>
+              <div className="space-y-4">
+                <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] block">Sample Test Cases</span>
                 {activeQuestion.testCases.map((tc, idx) => (
-                  <div key={idx} className="p-3 bg-slate-900 border border-slate-800 rounded-lg space-y-1">
-                    <span className="text-[11px] font-semibold text-slate-400">Sample #{idx + 1}</span>
-                    <pre className="p-2 bg-slate-950 rounded font-mono text-slate-200">{tc.input}</pre>
-                    <span className="text-[11px] text-slate-500 font-semibold block pt-1">Expected Output:</span>
-                    <pre className="p-2 bg-slate-950 rounded font-mono text-emerald-400">{tc.expectedOutput}</pre>
+                  <div key={idx} className="portal-card bg-slate-900/50 border-slate-800 p-5 space-y-4">
+                    <div>
+                      <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-2">Input</span>
+                      <pre className="p-3 bg-slate-950 rounded-xl font-mono text-[11px] text-slate-200 border border-slate-800 overflow-x-auto">{tc.input || "No input required"}</pre>
+                    </div>
+                    <div>
+                      <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-2">Expected Output</span>
+                      <pre className="p-3 bg-slate-950 rounded-xl font-mono text-[11px] text-emerald-400 border border-emerald-900/30 overflow-x-auto">{tc.expectedOutput}</pre>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -269,8 +297,13 @@ export const ExaminationRoom: React.FC = () => {
           </div>
 
           {/* Right: Monaco Editor & Output */}
-          <div className="lg:col-span-7 flex flex-col h-full bg-slate-900 overflow-hidden">
-            <div className="flex-1 min-h-[300px] border-b border-slate-800">
+          <div className="lg:col-span-8 flex flex-col h-full bg-slate-900 overflow-hidden">
+            <div className="flex-1 min-h-[300px] border-b border-slate-800 relative">
+              <div className="absolute top-4 right-6 z-10 flex items-center gap-2">
+                <span className="px-3 py-1 bg-slate-950/80 backdrop-blur-md rounded-lg text-[9px] font-black text-indigo-400 uppercase tracking-widest border border-slate-800">
+                  {language} RUNTIME
+                </span>
+              </div>
               <Editor
                 height="100%"
                 language={language.toLowerCase() === "python" ? "python" : "cpp"}
@@ -278,70 +311,115 @@ export const ExaminationRoom: React.FC = () => {
                 value={codeMap[activeQuestion.id] || ""}
                 onChange={handleCodeChange}
                 options={{
-                  fontSize: 14,
+                  fontSize: 15,
                   minimap: { enabled: false },
                   lineNumbers: "on",
                   fontFamily: "JetBrains Mono, monospace",
                   automaticLayout: true,
                   tabSize: 4,
+                  padding: { top: 20 },
+                  cursorStyle: "block",
+                  smoothScrolling: true,
                 }}
               />
             </div>
 
-            {/* Console Tabs */}
-            <div className="h-56 flex flex-col bg-slate-950 font-mono text-xs">
-              <div className="flex items-center space-x-4 border-b border-slate-800 px-4 bg-slate-900/80">
+            {/* Console Tabs - Integrated Style */}
+            <div className="h-64 flex flex-col bg-slate-950">
+              <div className="flex items-center space-x-6 border-b border-slate-800 px-8 bg-slate-900/80">
                 <button
                   onClick={() => setConsoleTab("output")}
-                  className={`py-2 text-xs font-semibold border-b-2 transition-colors ${
-                    consoleTab === "output" ? "border-indigo-500 text-indigo-400" : "border-transparent text-slate-400"
+                  className={`py-3 text-[10px] font-black uppercase tracking-widest border-b-2 transition-all ${
+                    consoleTab === "output" ? "border-indigo-500 text-indigo-400" : "border-transparent text-slate-500 hover:text-slate-300"
                   }`}
                 >
-                  Execution Output
+                  <div className="flex items-center gap-2">
+                    <Terminal className="w-3.5 h-3.5" />
+                    <span>Dry Run Output</span>
+                  </div>
                 </button>
                 <button
                   onClick={() => setConsoleTab("verdict")}
-                  className={`py-2 text-xs font-semibold border-b-2 transition-colors ${
-                    consoleTab === "verdict" ? "border-indigo-500 text-indigo-400" : "border-transparent text-slate-400"
+                  className={`py-3 text-[10px] font-black uppercase tracking-widest border-b-2 transition-all ${
+                    consoleTab === "verdict" ? "border-indigo-500 text-indigo-400" : "border-transparent text-slate-500 hover:text-slate-300"
                   }`}
                 >
-                  Submission Status
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>Submission Status</span>
+                  </div>
                 </button>
               </div>
 
-              <div className="p-4 flex-1 overflow-y-auto">
+              <div className="p-8 flex-1 overflow-y-auto font-mono text-xs">
                 {consoleTab === "output" && (
-                  <div>
+                  <div className="h-full">
                     {isRunning ? (
-                      <span className="text-slate-500 animate-pulse">Running test execution...</span>
+                      <div className="flex items-center gap-3 text-slate-500 animate-pulse">
+                        <div className="w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                        <span>Compiling and executing in sandboxed environment...</span>
+                      </div>
                     ) : runOutput ? (
-                      <div className="space-y-2">
-                        <Badge status={runOutput.status} />
-                        {runOutput.stdout && <pre className="p-2 bg-slate-900 rounded">{runOutput.stdout}</pre>}
-                        {runOutput.stderr && <pre className="p-2 bg-rose-950/40 text-rose-300 rounded">{runOutput.stderr}</pre>}
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-3">
+                          <Badge status={runOutput.status} />
+                          <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{runOutput.executionTimeMs}ms execution</span>
+                        </div>
+                        {runOutput.stdout && (
+                          <div className="space-y-2">
+                            <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">stdout</span>
+                            <pre className="p-4 bg-slate-900 rounded-2xl border border-slate-800 text-slate-200 overflow-x-auto">{runOutput.stdout}</pre>
+                          </div>
+                        )}
+                        {runOutput.stderr && (
+                          <div className="space-y-2">
+                            <span className="text-[9px] font-black text-rose-500 uppercase tracking-widest">stderr</span>
+                            <pre className="p-4 bg-rose-950/20 text-rose-300 rounded-2xl border border-rose-900/30 overflow-x-auto">{runOutput.stderr}</pre>
+                          </div>
+                        )}
                       </div>
                     ) : (
-                      <span className="text-slate-500">Run code to test against sample inputs.</span>
+                      <div className="flex flex-col items-center justify-center h-full text-slate-600 gap-2">
+                        <Play className="w-8 h-8 opacity-20" />
+                        <span className="text-[10px] font-black uppercase tracking-widest">Code execution is unavailable</span>
+                      </div>
                     )}
                   </div>
                 )}
 
                 {consoleTab === "verdict" && (
-                  <div>
-                    {submittedQuestions[activeQuestion.id] ? (
-                      <div className="p-3 bg-slate-900 border border-slate-800 rounded-lg space-y-2">
+                  <div className="h-full">
+                    {isSubmitting ? (
+                      <div className="flex items-center gap-3 text-slate-500 animate-pulse">
+                        <div className="w-4 h-4 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+                        <span>Evaluating submission against private test suite...</span>
+                      </div>
+                    ) : submittedQuestions[activeQuestion.id] ? (
+                      <div className="portal-card bg-slate-900/50 border-slate-800 p-6 space-y-4">
                         <div className="flex items-center justify-between">
-                          <span className="font-bold text-slate-200">
-                            Score: {submittedQuestions[activeQuestion.id].score} / {activeQuestion.marks} Points
-                          </span>
-                          <Badge status={submittedQuestions[activeQuestion.id].status} />
+                          <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-2xl bg-indigo-600/20 flex items-center justify-center text-indigo-400 border border-indigo-500/30">
+                              <Trophy className="w-6 h-6" />
+                            </div>
+                            <div>
+                              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{submittedQuestions[activeQuestion.id].status === "PENDING" ? "Submission status" : "Final evaluation score"}</p>
+                              <p className="text-2xl font-black text-white uppercase tracking-tighter">
+                                {submittedQuestions[activeQuestion.id].status === "PENDING" ? "Submitted — awaiting evaluation" : `${submittedQuestions[activeQuestion.id].score} / ${activeQuestion.marks} Points`}
+                              </p>
+                            </div>
+                          </div>
+                          <Badge status={submittedQuestions[activeQuestion.id].status} size="md" />
                         </div>
-                        <p className="text-slate-400 text-[11px]">
-                          Submitted at {new Date(submittedQuestions[activeQuestion.id].submittedAt).toLocaleTimeString()}
-                        </p>
+                        <div className="flex items-center gap-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest pt-2">
+                          <span className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" /> Submitted at {new Date(submittedQuestions[activeQuestion.id].submittedAt).toLocaleTimeString()}</span>
+                          {submittedQuestions[activeQuestion.id].status !== "PENDING" && <span className="flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /> {submittedQuestions[activeQuestion.id].passedTests} tests passed</span>}
+                        </div>
                       </div>
                     ) : (
-                      <span className="text-slate-500">Submit your solution when ready for final evaluation.</span>
+                      <div className="flex flex-col items-center justify-center h-full text-slate-600 gap-2">
+                        <Send className="w-8 h-8 opacity-20" />
+                        <span className="text-[10px] font-black uppercase tracking-widest">No submission recorded for this challenge</span>
+                      </div>
                     )}
                   </div>
                 )}
@@ -350,7 +428,10 @@ export const ExaminationRoom: React.FC = () => {
           </div>
         </div>
       ) : (
-        <div className="p-8 text-center text-slate-500">Select a question to begin.</div>
+        <div className="flex flex-col items-center justify-center flex-1 bg-slate-950 text-slate-600 gap-4">
+          <FileCode className="w-16 h-16 opacity-10" />
+          <p className="text-sm font-black uppercase tracking-[0.3em]">Select a Challenge to Begin Assessment</p>
+        </div>
       )}
     </div>
   );

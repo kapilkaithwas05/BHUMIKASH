@@ -6,8 +6,37 @@ import {
 } from "../middleware/auth.middleware";
 import { authorizeRoles } from "../middleware/role.middleware";
 import { getParam } from "../lib/params";
+import { canManageLab, findManageableLab } from "../lib/access";
 
 const router = Router({ mergeParams: true });
+
+/**
+ * Notifies every student enrolled in a lab that an assessment has been scheduled.
+ * Draft (unpublished) assessments are intentionally never announced.
+ */
+async function notifyEnrolledStudents(
+  labId: string,
+  labTitle: string,
+  examination: { title: string; startTime: Date; endTime: Date }
+) {
+  const enrollments = await prisma.enrollment.findMany({
+    where: { labId },
+    select: { studentId: true },
+  });
+
+  if (enrollments.length === 0) {
+    return;
+  }
+
+  await prisma.notification.createMany({
+    data: enrollments.map((enrollment) => ({
+      userId: enrollment.studentId,
+      title: "New assessment scheduled",
+      message: `"${examination.title}" has been scheduled in ${labTitle}, running from ${examination.startTime.toISOString()} to ${examination.endTime.toISOString()}.`,
+      type: "EXAMINATION",
+    })),
+  });
+}
 
 /* GET /api/labs/:labId/examinations */
 router.get("/", authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
@@ -15,7 +44,11 @@ router.get("/", authenticateToken, async (req: AuthenticatedRequest, res: Respon
     const labId = getParam(req.params.labId);
     const { userId, role } = req.user!;
 
-    if (role === "STUDENT") {
+    if (role !== "STUDENT" && labId && !await canManageLab(labId, req.user!)) {
+      return res.status(403).json({ message: "You do not have permission to view assessments in this laboratory" });
+    }
+
+    if (role === "STUDENT" && labId) {
       const enrollment = await prisma.enrollment.findUnique({
         where: {
           studentId_labId: {
@@ -30,11 +63,24 @@ router.get("/", authenticateToken, async (req: AuthenticatedRequest, res: Respon
       }
     }
 
+    const where: any = { labId: labId || undefined };
+    if (role === "STUDENT") {
+      where.isPublished = true;
+      where.lab = {
+        isPublished: true,
+        enrollments: { some: { studentId: userId } },
+      };
+    } else if (!labId && role === "FACULTY") {
+      where.lab = { createdById: userId };
+    } else if (!labId && role === "HOD") {
+      const hod = await prisma.user.findUnique({ where: { id: userId }, select: { departmentId: true } });
+      where.lab = hod?.departmentId
+        ? { OR: [{ departmentId: hod.departmentId }, { createdBy: { departmentId: hod.departmentId } }] }
+        : { createdById: userId };
+    }
+
     const examinations = await prisma.examination.findMany({
-      where: {
-        labId: labId || undefined,
-        ...(role === "STUDENT" ? { isPublished: true } : {}),
-      },
+      where,
       orderBy: { startTime: "desc" },
       include: {
         questions: {
@@ -84,6 +130,7 @@ router.get("/:examinationId", authenticateToken, async (req: AuthenticatedReques
             title: true,
             language: true,
             createdById: true,
+            isPublished: true,
           },
         },
         questions: {
@@ -112,7 +159,14 @@ router.get("/:examinationId", authenticateToken, async (req: AuthenticatedReques
       return res.status(404).json({ message: "Examination not found" });
     }
 
+    if (role !== "STUDENT" && !await canManageLab(examination.labId, req.user!)) {
+      return res.status(403).json({ message: "You do not have permission to view this assessment" });
+    }
+
     if (role === "STUDENT") {
+      if (!examination.lab.isPublished) {
+        return res.status(403).json({ message: "This laboratory is not published" });
+      }
       if (!examination.isPublished) {
         return res.status(403).json({ message: "This examination is not published yet" });
       }
@@ -185,12 +239,7 @@ router.post(
         return res.status(400).json({ message: "End time must be after start time" });
       }
 
-      const lab = await prisma.lab.findFirst({
-        where: {
-          id: labId,
-          ...(role === "FACULTY" ? { createdById: userId } : {}),
-        },
-      });
+      const lab = await findManageableLab(labId, req.user!);
 
       if (!lab) {
         return res.status(404).json({ message: "Lab not found or you lack permission to manage it" });
@@ -223,6 +272,14 @@ router.post(
         },
       });
 
+      if (examination.isPublished) {
+        try {
+          await notifyEnrolledStudents(labId, lab.title, examination);
+        } catch (notifyError) {
+          console.error("Examination notification failed:", notifyError);
+        }
+      }
+
       return res.status(201).json({
         message: "Examination created successfully",
         examination,
@@ -248,12 +305,38 @@ router.put(
         return res.status(400).json({ message: "Examination ID is required" });
       }
 
+      const existing = await prisma.examination.findUnique({
+        where: { id: examinationId },
+      });
+
+      if (!existing) {
+        return res.status(404).json({ message: "Examination not found" });
+      }
+
+      if (!await canManageLab(existing.labId, req.user!)) {
+        return res.status(403).json({ message: "You do not have permission to manage this assessment" });
+      }
+
       const exam = await prisma.examination.update({
         where: { id: examinationId },
         data: {
           isPublished: typeof isPublished === "boolean" ? isPublished : true,
         },
       });
+
+      // Announce the assessment the moment it first becomes visible to students.
+      if (exam.isPublished && !existing.isPublished) {
+        try {
+          const lab = await prisma.lab.findUnique({
+            where: { id: exam.labId },
+            select: { title: true },
+          });
+
+          await notifyEnrolledStudents(exam.labId, lab?.title ?? "your lab", exam);
+        } catch (notifyError) {
+          console.error("Examination notification failed:", notifyError);
+        }
+      }
 
       return res.status(200).json({
         message: `Examination ${exam.isPublished ? "published" : "unpublished"} successfully`,
@@ -324,6 +407,10 @@ router.get(
         return res.status(404).json({ message: "Examination not found" });
       }
 
+      if (!await canManageLab(exam.labId, req.user!)) {
+        return res.status(403).json({ message: "You do not have permission to review this assessment" });
+      }
+
       // Group submissions by student
       const studentMap = new Map<string, any>();
       for (const enrollment of exam.lab.enrollments) {
@@ -353,7 +440,9 @@ router.get(
         });
 
         studentData.totalScore += sub.score;
-        studentData.status = "SUBMITTED";
+        studentData.status = sub.status === "PENDING" && studentData.status !== "SUBMITTED"
+          ? "PENDING"
+          : "SUBMITTED";
         studentMap.set(sub.studentId, studentData);
       }
 

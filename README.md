@@ -4,13 +4,13 @@
 
 ### An Integrated University Laboratory Submission and Assessment Portal
 
-**Code. Compile. Submit. Evaluate.**
+**Code. Practice. Submit. Review.**
 
-A modern, full-stack university coding portal designed for computer science curricula, laboratory management, synchronized practical assessments, and automated test-case evaluation.
+A university coding portal for laboratory management, practical assessments, code submissions, and faculty review.
 
 <br/>
 
-![Project Status](https://img.shields.io/badge/Status-Fully_Integrated-emerald?style=for-the-badge)
+![Project Status](https://img.shields.io/badge/Status-Core_Workflow-indigo?style=for-the-badge)
 ![Tech Stack](https://img.shields.io/badge/Stack-React_18_+_Node.js_+_PostgreSQL-indigo?style=for-the-badge)
 ![Architecture](https://img.shields.io/badge/ORM-Prisma_7-blue?style=for-the-badge)
 ![Editor](https://img.shields.io/badge/Editor-Monaco_Code_Editor-violet?style=for-the-badge)
@@ -36,7 +36,7 @@ The system connects four distinct stakeholders:
 1. **Vice Chancellor / Executive Admin**: University-wide oversight, department comparisons, and audit logging.
 2. **Head of Department (HOD)**: Department-level laboratory monitoring, faculty directory, and exam participation statistics.
 3. **Faculty**: Course authoring, question management (with visible sample and private hidden test cases), manual and bulk student enrollment (CSV/XLSX), practical examination scheduling, and grading exports.
-4. **Students**: Distraction-free Monaco coding workspace with live compilation output, server-synchronized assessment countdown timers, copy/paste deterrents, and instant automated grading.
+4. **Students**: Monaco coding workspace with synchronized assessment timers and persistent submissions. Submissions remain pending until isolated code execution is configured.
 
 ---
 
@@ -54,8 +54,8 @@ flowchart TD
     subgraph Backend ["Backend (apps/api — Express 5 + TypeScript)"]
         Router[REST API Layer]
         AuthMid[Auth & Role Verification]
-        EvalSvc[Automated Evaluation Service]
-        ExecSvc[Sandboxed Code Execution Engine]
+        EvalSvc[Submission Status: Pending Evaluation]
+        ExecSvc[Isolated Code Runner: Not Configured]
         AMS[University AMS Gateway Adapter]
     end
 
@@ -69,7 +69,6 @@ flowchart TD
     Router --> AuthMid
     AuthMid --> Prisma
     Router --> EvalSvc
-    EvalSvc --> ExecSvc
     Prisma --> Postgres
     Router --> AMS
 ```
@@ -90,8 +89,9 @@ flowchart TD
 | View All Student Submissions & Scores | ✓ | ✓ | ✓ | — |
 | Export Assessment Results (CSV) | ✓ | ✓ | ✓ | — |
 | Join Laboratory via Enrollment Key | — | — | — | ✓ |
-| Monaco Editor Coding & Run Practice | — | — | — | ✓ |
-| Submit Code for Automated Evaluation | — | — | — | ✓ |
+| Monaco Editor Coding | — | — | — | ✓ |
+| Isolated Code Execution | — | — | — | Pending |
+| Submit Code for Review | — | — | — | ✓ |
 | Timed Assessment Participation | — | — | — | ✓ |
 
 ---
@@ -156,7 +156,13 @@ The project includes an institutional seed script pre-populating departments, fa
    ```
 
 4. **Run the Application**
-   Open two terminal sessions:
+   Start PostgreSQL and make sure `apps/api/.env` has a valid `DATABASE_URL` and `JWT_SECRET`. Then run both services together:
+
+   ```bash
+   npm run dev
+   ```
+
+   On Windows PowerShell, use `npm.cmd run dev`. To run them separately, open two terminals:
 
    **Terminal 1 — Backend API Server:**
    ```bash
@@ -178,14 +184,9 @@ The project includes an institutional seed script pre-populating departments, fa
 
 ---
 
-## ⚙️ Code Execution Engine
+## ⚙️ Code Execution Status
 
-Submitted code is evaluated through a layered, sandboxed execution service (`apps/api/src/services/execution.service.ts`):
-- **Temporary Working Directory Sandboxing**: Each run creates a fresh, isolated temporary folder (`os.tmpdir()/labnexus-exec-<id>`) that is forcefully cleaned up upon completion.
-- **Strict Execution Timeouts**: Default 2,000ms timeout per test case. If an infinite loop is detected, the entire child process tree is forcefully terminated (`taskkill /F /T` on Windows or `SIGKILL` on Linux) and flagged as `TIME_LIMIT_EXCEEDED`.
-- **Output Truncation**: Maximum stdout/stderr capture limited to 64 KB to defend against memory exhaustion attacks.
-- **Hidden Test Case Masking**: Student requests receive sanitized outputs where private test inputs and expected outputs are never returned to the browser.
-- **Compiler Support**: Native GCC MinGW compilation for C/C++ and unbuffered Python 3 execution.
+The API does not execute submitted code. The existing child-process runner uses temporary folders and timeouts, but these controls do not isolate untrusted programs from the host. The Run endpoint returns `503` until an isolated execution service is configured. Student submissions are saved with `PENDING` status and can be reviewed by the lab owner. The standalone execution verification script checks local Python/C behavior; it does not establish sandbox security.
 
 ---
 
@@ -211,8 +212,8 @@ Submitted code is evaluated through a layered, sandboxed execution service (`app
 - `GET /api/labs/:labId/questions` — Lists questions (masks hidden tests for students).
 - `GET /api/questions/:questionId` — Question details and constraints.
 - `POST /api/labs/:labId/questions` — Creates question with test cases.
-- `POST /api/questions/:questionId/run` — Practice execution with custom stdin.
-- `POST /api/questions/:questionId/submit` — Automated grading against all test cases.
+- `POST /api/questions/:questionId/run` — Returns `503` until an isolated execution service is configured.
+- `POST /api/questions/:questionId/submit` — Saves a submission with `PENDING` evaluation status.
 
 ### Examinations
 - `GET /api/labs/:labId/examinations` — Lists scheduled assessments.
@@ -234,4 +235,4 @@ Submitted code is evaluated through a layered, sandboxed execution service (`app
 - **Database-Backed Role Authorization**: Tokens verify current PostgreSQL database roles on each protected request.
 - **Server-Side Deadline Enforcement**: The backend verifies assessment start and end windows, rejecting late submissions.
 - **SQL Injection Defense**: All database queries are parameter-safe via Prisma ORM.
-- **Process Isolation**: Untrusted code never executes directly in the main server loop.
+- **Code Execution Disabled**: The API does not run untrusted submissions until an isolated runner is available.
