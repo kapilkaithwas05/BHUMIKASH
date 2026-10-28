@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import { api } from "../services/api";
@@ -14,15 +14,13 @@ import {
   ChevronDown,
   Sun,
   Moon,
-  Home,
-  BookOpen,
-  Terminal,
 } from "lucide-react";
 
 export const Navbar: React.FC = () => {
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
+  const location = useLocation();
   const [unreadCount, setUnreadCount] = useState(0);
   const [profileOpen, setProfileOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
@@ -82,53 +80,49 @@ export const Navbar: React.FC = () => {
   };
 
   const roleInfo = getRoleBadge(user?.role);
+  const pageTitle = location.pathname === "/"
+    ? "Dashboard"
+    : location.pathname.startsWith("/labs/")
+      ? "Laboratory details"
+      : location.pathname === "/labs"
+        ? "Laboratories"
+        : location.pathname === "/examinations"
+          ? "Examinations"
+          : location.pathname.endsWith("/results")
+            ? "Assessment results"
+            : location.pathname === "/students"
+              ? "Students"
+              : location.pathname === "/notifications"
+                ? "Notifications"
+                : location.pathname === "/profile"
+                  ? "Profile"
+                  : "Workspace";
 
   return (
-    <header className="sticky top-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 transition-colors duration-200 shadow-sm">
-      <div className="max-w-[1600px] mx-auto px-4 h-16 flex items-center justify-between gap-4">
+    <header className="portal-topbar sticky top-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 transition-colors duration-200 shadow-sm">
+        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
         {/* Logo and Brand */}
         <div className="flex items-center gap-6 shrink-0">
           <Link to="/" className="flex items-center gap-3 group">
-            <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-lg shadow-indigo-500/20 group-hover:rotate-6 transition-all duration-300">
+            <div className="portal-brand-mark w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-lg shadow-indigo-500/20 group-hover:rotate-6 transition-all duration-300">
               <Code2 className="w-6 h-6" />
             </div>
-            <div className="hidden lg:block">
+            <div className="block">
               <div className="flex items-center gap-2">
-                <span className="font-black text-xl text-slate-900 dark:text-white tracking-tight uppercase">LabNEXUS</span>
+                <span className="font-bold text-lg text-slate-900 dark:text-white tracking-tight">LabNEXUS</span>
               </div>
+              <span className="portal-brand-subtitle">MITS · Gwalior</span>
             </div>
           </Link>
         </div>
 
         {/* Navigation for LabNEXUS assessment workflows */}
         {user && (
-          <nav className="hidden md:flex items-center justify-center flex-1 gap-1 lg:gap-2 max-w-sm px-4 py-1.5 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-800/50">
-            <Link to="/" className="nav-icon-btn group" title="Home">
-              <Home className="w-5 h-5" />
-              <span className="nav-tooltip">Home</span>
-            </Link>
-            <Link to="/#labs" className="nav-icon-btn group" title="Courses">
-              <BookOpen className="w-5 h-5" />
-              <span className="nav-tooltip">Labs</span>
-            </Link>
-            <Link to="/#exams" className="nav-icon-btn group" title="Academic">
-              <GraduationCap className="w-5 h-5" />
-              <span className="nav-tooltip">Assessments</span>
-            </Link>
-          </nav>
+          <div className="portal-breadcrumb hidden sm:flex"><span>Workspace</span><span className="portal-breadcrumb-separator">/</span><strong>{pageTitle}</strong></div>
         )}
 
         {/* User profile & actions */}
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-          {/* Developer Button - Matching Reference */}
-          <Link 
-            to="/developer" 
-            className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 text-xs font-bold hover:bg-indigo-600 hover:text-white transition-all duration-200 group"
-          >
-            <Terminal className="w-4 h-4" />
-            <span>Developer</span>
-          </Link>
-
           {/* Theme Toggle */}
           <button
             onClick={toggleTheme}

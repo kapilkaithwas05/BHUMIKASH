@@ -45,8 +45,17 @@ router.get("/", authenticateToken, async (req: AuthenticatedRequest, res: Respon
       }
     }
 
+    const now = new Date();
+    const publicationWindow = role === "STUDENT" ? {
+      isPublished: true,
+      AND: [
+        { OR: [{ availableFrom: null }, { availableFrom: { lte: now } }] },
+        { OR: [{ availableUntil: null }, { availableUntil: { gte: now } }] },
+      ],
+    } : {};
+
     const questions = await prisma.question.findMany({
-      where: { labId },
+      where: { labId, ...publicationWindow },
       orderBy: { orderIndex: "asc" },
       include: {
         testCases: {
@@ -144,6 +153,21 @@ router.get("/:questionId", authenticateToken, async (req: AuthenticatedRequest, 
       if (!enrollment) {
         return res.status(403).json({ message: "You are not enrolled in this lab" });
       }
+      const now = new Date();
+      const isCurrentlyAvailable = question.isPublished &&
+        (!question.availableFrom || now >= question.availableFrom) &&
+        (!question.availableUntil || now <= question.availableUntil);
+      // Let enrolled students reopen a question they already attempted after its window
+      // closes. Submission routes continue to enforce the original availability window.
+      const previousAttempt = !isCurrentlyAvailable
+        ? await prisma.submission.findFirst({
+            where: { questionId, studentId: userId },
+            select: { id: true },
+          })
+        : null;
+      if (!isCurrentlyAvailable && !previousAttempt) {
+        return res.status(404).json({ message: "Question is not currently available" });
+      }
     }
 
     return res.status(200).json({
@@ -159,6 +183,88 @@ router.get("/:questionId", authenticateToken, async (req: AuthenticatedRequest, 
 });
 
 /* POST /api/labs/:labId/questions */
+router.post(
+  "/sample-set",
+  authenticateToken,
+  authorizeRoles("FACULTY", "HOD", "VICE_CHANCELLOR"),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const labId = getParam(req.params.labId);
+      const lab = labId ? await findManageableLab(labId, req.user!) : null;
+      if (!lab) return res.status(404).json({ message: "Lab not found or you lack permission to manage it" });
+
+      const samples = [
+        {
+          title: "Add Two Integers",
+          description: "Read two integers from standard input and print their sum.",
+          inputFormat: "Two space-separated integers.",
+          outputFormat: "Print their sum.",
+          difficulty: "EASY",
+          cases: [{ input: "5 7", output: "12", hidden: false }, { input: "-3 8", output: "5", hidden: true }],
+        },
+        {
+          title: "Reverse a Word",
+          description: "Read one word and print its characters in reverse order.",
+          inputFormat: "A single word.",
+          outputFormat: "The word reversed.",
+          difficulty: "EASY",
+          cases: [{ input: "labnexus", output: "suxenbal", hidden: false }, { input: "MITS", output: "STIM", hidden: true }],
+        },
+        {
+          title: "Find the Largest Number",
+          description: "Read an integer N followed by N integers. Print the largest value.",
+          inputFormat: "N on the first line, followed by N space-separated integers.",
+          outputFormat: "Print the largest integer.",
+          difficulty: "MEDIUM",
+          cases: [{ input: "5\n3 9 2 11 4", output: "11", hidden: false }, { input: "4\n-8 -2 -10 -5", output: "-2", hidden: true }],
+        },
+      ];
+      const sampleTitles = samples.map(({ title }) => title);
+      const existing = await prisma.question.findMany({
+        where: { labId, title: { in: sampleTitles } },
+        select: { title: true },
+      });
+      const existingTitles = new Set(existing.map(({ title }) => title));
+      const missingSamples = samples.filter(({ title }) => !existingTitles.has(title));
+
+      const created = await prisma.$transaction(async (tx) => {
+        const orderIndexStart = await tx.question.count({ where: { labId } });
+        return Promise.all(missingSamples.map((sample, index) => tx.question.create({
+          data: {
+            labId,
+            contentType: "PRACTICE",
+            isPublished: true,
+            title: sample.title,
+            description: sample.description,
+            inputFormat: sample.inputFormat,
+            outputFormat: sample.outputFormat,
+            difficulty: sample.difficulty,
+            marks: 10,
+            orderIndex: orderIndexStart + index,
+            testCases: {
+              create: sample.cases.map((testCase, orderIndex) => ({
+                input: testCase.input,
+                expectedOutput: testCase.output,
+                isHidden: testCase.hidden,
+                orderIndex,
+              })),
+            },
+          },
+        })));
+      });
+
+      return res.status(201).json({
+        message: missingSamples.length ? "Starter practice questions added" : "Starter practice questions are already present",
+        createdCount: created.length,
+        questions: created,
+      });
+    } catch (error) {
+      console.error("Create sample questions error:", error);
+      return res.status(500).json({ message: "Could not add starter practice questions" });
+    }
+  }
+);
+
 router.post(
   "/",
   authenticateToken,
@@ -180,6 +286,10 @@ router.post(
         starterCode,
         testCases,
         attemptsAllowed,
+        contentType,
+        isPublished,
+        availableFrom,
+        availableUntil,
       } = req.body;
 
       if (!title || typeof title !== "string" || !title.trim()) {
@@ -197,11 +307,30 @@ router.post(
         return res.status(404).json({ message: "Lab not found or you lack permission to manage it" });
       }
 
+      const parsedAvailableFrom = availableFrom ? new Date(availableFrom) : null;
+      const parsedAvailableUntil = availableUntil ? new Date(availableUntil) : null;
+      if (contentType !== undefined && !["DAILY", "PRACTICE"].includes(contentType)) {
+        return res.status(400).json({ message: "Question type must be DAILY or PRACTICE" });
+      }
+      if (isPublished !== undefined && typeof isPublished !== "boolean") {
+        return res.status(400).json({ message: "isPublished must be a boolean" });
+      }
+      if ((parsedAvailableFrom && Number.isNaN(parsedAvailableFrom.getTime())) || (parsedAvailableUntil && Number.isNaN(parsedAvailableUntil.getTime()))) {
+        return res.status(400).json({ message: "Question availability dates are invalid" });
+      }
+      if (parsedAvailableFrom && parsedAvailableUntil && parsedAvailableUntil <= parsedAvailableFrom) {
+        return res.status(400).json({ message: "Availability end must be after its start" });
+      }
+
       const count = await prisma.question.count({ where: { labId } });
 
       const newQuestion = await prisma.question.create({
         data: {
           labId,
+          contentType: contentType || "PRACTICE",
+          isPublished: isPublished === undefined ? true : isPublished,
+          availableFrom: parsedAvailableFrom,
+          availableUntil: parsedAvailableUntil,
           title: title.trim(),
           description: description.trim(),
           inputFormat: inputFormat?.trim() || null,
@@ -246,7 +375,7 @@ router.post(
 router.put(
   "/:questionId",
   authenticateToken,
-  authorizeRoles("FACULTY", "HOD", "VICE_CHANCELLOR"),
+  authorizeRoles("FACULTY"),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       const questionId = getParam(req.params.questionId);
@@ -264,6 +393,10 @@ router.put(
         starterCode,
         testCases,
         attemptsAllowed,
+        contentType,
+        isPublished,
+        availableFrom,
+        availableUntil,
       } = req.body;
 
       const question = await prisma.question.findUnique({
@@ -278,6 +411,15 @@ router.put(
       if (!await canManageLab(question.labId, req.user!)) {
         return res.status(403).json({ message: "You do not have permission to modify this question" });
       }
+
+      const parsedAvailableFrom = availableFrom === undefined ? undefined : availableFrom ? new Date(availableFrom) : null;
+      const parsedAvailableUntil = availableUntil === undefined ? undefined : availableUntil ? new Date(availableUntil) : null;
+      if (contentType !== undefined && !["DAILY", "PRACTICE"].includes(contentType)) return res.status(400).json({ message: "Question type must be DAILY or PRACTICE" });
+      if (isPublished !== undefined && typeof isPublished !== "boolean") return res.status(400).json({ message: "isPublished must be a boolean" });
+      if ((parsedAvailableFrom instanceof Date && Number.isNaN(parsedAvailableFrom.getTime())) || (parsedAvailableUntil instanceof Date && Number.isNaN(parsedAvailableUntil.getTime()))) return res.status(400).json({ message: "Question availability dates are invalid" });
+      const effectiveFrom = parsedAvailableFrom === undefined ? question.availableFrom : parsedAvailableFrom;
+      const effectiveUntil = parsedAvailableUntil === undefined ? question.availableUntil : parsedAvailableUntil;
+      if (effectiveFrom && effectiveUntil && effectiveUntil <= effectiveFrom) return res.status(400).json({ message: "Availability end must be after its start" });
 
       // Update question and optionally replace test cases
       const updated = await prisma.$transaction(async (tx) => {
@@ -314,6 +456,10 @@ router.put(
                   : null
                 : undefined,
             starterCode: starterCode !== undefined ? starterCode : undefined,
+            contentType: contentType !== undefined ? contentType : undefined,
+            isPublished: isPublished !== undefined ? isPublished : undefined,
+            availableFrom: parsedAvailableFrom,
+            availableUntil: parsedAvailableUntil,
           },
           include: { testCases: true },
         });
@@ -334,7 +480,7 @@ router.put(
 router.delete(
   "/:questionId",
   authenticateToken,
-  authorizeRoles("FACULTY", "HOD", "VICE_CHANCELLOR"),
+  authorizeRoles("FACULTY"),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       const questionId = getParam(req.params.questionId);

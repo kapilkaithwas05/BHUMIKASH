@@ -11,6 +11,7 @@ import {
   KeyRound,
   CheckCircle2,
   Code2,
+  GraduationCap,
 } from "lucide-react";
 import { Modal } from "./Modal";
 import { api } from "../services/api";
@@ -39,6 +40,24 @@ export const Sidebar: React.FC<SidebarProps> = ({ onLabCreated, onLabJoined }) =
   const [labLang, setLabLang] = useState("C");
   const [createLoading, setCreateLoading] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [academicOptions, setAcademicOptions] = useState<Awaited<ReturnType<typeof api.getAcademicOptions>> | null>(null);
+  const [academicOptionsError, setAcademicOptionsError] = useState<string | null>(null);
+  const [selectedCourseId, setSelectedCourseId] = useState("");
+  const [selectedCohortId, setSelectedCohortId] = useState("");
+
+  const openCreateModal = () => {
+    setIsCreateModalOpen(true);
+    if (academicOptions || academicOptionsError) return;
+    api.getAcademicOptions().then(setAcademicOptions).catch((error: Error) => setAcademicOptionsError(error.message));
+  };
+
+  const selectedDepartment = academicOptions?.departments.find((department) => department.id === academicOptions.homeDepartmentId);
+  const availableCourses = selectedDepartment?.courses ?? [];
+  const availableCohorts = selectedDepartment?.programs.flatMap((program) => program.cohorts.map((cohort) => ({
+    ...cohort,
+    programName: program.name,
+    programCode: program.code,
+  }))) ?? [];
 
   const handleJoinLab = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,6 +68,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onLabCreated, onLabJoined }) =
       const res = await api.joinLabByKey(enrollmentKey);
       setJoinSuccess(res.message);
       setEnrollmentKey("");
+      window.dispatchEvent(new CustomEvent("labnexus:labs-changed"));
       if (onLabJoined) onLabJoined();
       setTimeout(() => {
         setIsJoinModalOpen(false);
@@ -71,10 +91,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ onLabCreated, onLabJoined }) =
         code: labCode || undefined,
         description: labDesc || undefined,
         language: labLang,
+        courseId: selectedCourseId || undefined,
+        cohortId: selectedCohortId || undefined,
       });
+      window.dispatchEvent(new CustomEvent("labnexus:labs-changed"));
       setLabTitle("");
       setLabCode("");
       setLabDesc("");
+      setSelectedCourseId("");
+      setSelectedCohortId("");
       setIsCreateModalOpen(false);
       if (onLabCreated) onLabCreated();
     } catch (err: any) {
@@ -90,45 +115,53 @@ export const Sidebar: React.FC<SidebarProps> = ({ onLabCreated, onLabJoined }) =
     navItems.push(
       { label: "Institution Overview", path: "/#overview", icon: <LayoutDashboard className="w-4 h-4" /> },
       { label: "Department Metrics", path: "/#departments", icon: <FlaskConical className="w-4 h-4" /> },
+      { label: "Laboratories", path: "/labs", icon: <FlaskConical className="w-4 h-4" /> },
+      { label: "Examinations", path: "/examinations", icon: <CalendarCheck className="w-4 h-4" /> },
       { label: "Audit Logs", path: "/#audit", icon: <ShieldAlert className="w-4 h-4" /> }
+      ,{ label: "Students", path: "/students", icon: <GraduationCap className="w-4 h-4" /> }
     );
   } else if (user?.role === "HOD") {
     navItems.push(
       { label: "Department Overview", path: "/#overview", icon: <LayoutDashboard className="w-4 h-4" /> },
-      { label: "Department Labs", path: "/#labs", icon: <FlaskConical className="w-4 h-4" /> },
+      { label: "Laboratories", path: "/labs", icon: <FlaskConical className="w-4 h-4" /> },
+      { label: "Examinations", path: "/examinations", icon: <CalendarCheck className="w-4 h-4" /> },
       { label: "Faculty Directory", path: "/#faculty", icon: <Users className="w-4 h-4" /> }
+      ,{ label: "Students", path: "/students", icon: <GraduationCap className="w-4 h-4" /> }
     );
   } else if (user?.role === "FACULTY") {
     navItems.push(
       { label: "Overview", path: "/#overview", icon: <LayoutDashboard className="w-4 h-4" /> },
-      { label: "My Laboratories", path: "/#labs", icon: <FlaskConical className="w-4 h-4" /> }
+      { label: "MY LABS", path: "/labs", icon: <FlaskConical className="w-4 h-4" /> },
+      { label: "Examinations", path: "/examinations", icon: <CalendarCheck className="w-4 h-4" /> }
     );
   } else {
     // Student
     navItems.push(
       { label: "Overview", path: "/#overview", icon: <LayoutDashboard className="w-4 h-4" /> },
-      { label: "Active Assessments", path: "/#exams", icon: <CalendarCheck className="w-4 h-4" /> },
-      { label: "My Enrolled Labs", path: "/#labs", icon: <FlaskConical className="w-4 h-4" /> }
+      { label: "My Exams", path: "/examinations", icon: <CalendarCheck className="w-4 h-4" /> },
+      { label: "MY LABS", path: "/labs", icon: <FlaskConical className="w-4 h-4" /> }
     );
   }
 
+  navItems.push({ label: "Developers", path: "/developer", icon: <Code2 className="w-4 h-4" /> });
+
   return (
     <>
-      <aside className="w-64 bg-transparent min-h-[calc(100vh-4rem)] p-4 flex flex-col justify-between shrink-0 transition-all duration-300">
+      <aside className="portal-sidebar w-64 min-h-[calc(100vh-4rem)] p-4 flex flex-col justify-between shrink-0 transition-all duration-300">
         <div className="space-y-6">
           {/* Action Button based on Role */}
           {user?.role === "STUDENT" ? (
             <button
               onClick={() => setIsJoinModalOpen(true)}
-              className="w-full py-3.5 flex items-center justify-center gap-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl shadow-lg shadow-indigo-500/20 transition-all active:scale-95 group"
+              className="portal-sidebar-action w-full py-3.5 flex items-center justify-center gap-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl shadow-lg shadow-indigo-500/20 transition-all active:scale-95 group"
             >
               <KeyRound className="w-5 h-5 group-hover:rotate-12 transition-transform" />
               <span className="text-sm font-bold uppercase tracking-wider">Join Lab</span>
             </button>
-          ) : user?.role === "FACULTY" || user?.role === "HOD" ? (
+          ) : user?.role === "FACULTY" ? (
             <button
-              onClick={() => setIsCreateModalOpen(true)}
-              className="w-full py-3.5 flex items-center justify-center gap-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl shadow-lg shadow-indigo-500/20 transition-all active:scale-95 group"
+              onClick={openCreateModal}
+              className="portal-sidebar-action w-full py-3.5 flex items-center justify-center gap-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl shadow-lg shadow-indigo-500/20 transition-all active:scale-95 group"
             >
               <PlusCircle className="w-5 h-5 group-hover:rotate-12 transition-transform" />
               <span className="text-sm font-bold uppercase tracking-wider">Create Lab</span>
@@ -136,7 +169,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onLabCreated, onLabJoined }) =
           ) : null}
 
           {/* Nav List */}
-          <div className="portal-card p-3 border-none bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm shadow-sm">
+          <div className="portal-sidebar-nav p-3">
             <nav className="space-y-1.5">
               {navItems.map((item) => {
                 const isActive = location.pathname + location.hash === item.path;
@@ -144,13 +177,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ onLabCreated, onLabJoined }) =
                   <Link
                     key={item.label}
                     to={item.path}
-                    className={`flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-wide transition-all ${
+                    className={`portal-nav-link flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-wide transition-all ${
                       isActive
-                        ? "bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 translate-x-1"
-                        : "text-slate-500 dark:text-slate-400 hover:bg-white/80 dark:hover:bg-slate-800/80 hover:text-indigo-600 dark:hover:text-indigo-400"
+                        ? "is-active"
+                        : ""
                     }`}
                   >
-                    <span className={`transition-colors ${isActive ? "text-indigo-600 dark:text-indigo-400" : "text-slate-400 dark:text-slate-500"}`}>
+                    <span className="portal-nav-icon transition-colors">
                       {item.icon}
                     </span>
                     <span>{item.label}</span>
@@ -162,14 +195,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ onLabCreated, onLabJoined }) =
         </div>
 
         {/* System info footer */}
-        <div className="portal-card p-4 border-none bg-indigo-600 text-white shadow-xl shadow-indigo-500/20">
+        <div className="portal-sidebar-footer p-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white">
               <Code2 className="w-6 h-6" />
             </div>
             <div>
               <p className="text-[11px] font-black uppercase tracking-widest leading-none">LabNEXUS</p>
-              <p className="text-[9px] font-bold text-indigo-100 uppercase tracking-tighter mt-1">v1.0 Production</p>
+              <p className="text-[9px] font-bold text-indigo-100 uppercase tracking-tighter mt-1">Academic workspace</p>
             </div>
           </div>
         </div>
@@ -284,6 +317,35 @@ export const Sidebar: React.FC<SidebarProps> = ({ onLabCreated, onLabJoined }) =
               </select>
             </div>
           </div>
+          {academicOptionsError && (
+            <p className="text-xs text-amber-600 dark:text-amber-400">Academic links could not be loaded. The lab can still be created without them.</p>
+          )}
+          {academicOptions && (
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5 ml-1">Course / Subject</label>
+                <select
+                  value={selectedCourseId}
+                  onChange={(event) => setSelectedCourseId(event.target.value)}
+                  className="w-full px-3 py-2.5 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white"
+                >
+                  <option value="">No course linked</option>
+                  {availableCourses.map((course) => <option key={course.id} value={course.id}>{course.code} · {course.title}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5 ml-1">Branch · Semester · Section</label>
+                <select
+                  value={selectedCohortId}
+                  onChange={(event) => setSelectedCohortId(event.target.value)}
+                  className="w-full px-3 py-2.5 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white"
+                >
+                  <option value="">No cohort linked</option>
+                  {availableCohorts.map((cohort) => <option key={cohort.id} value={cohort.id}>{cohort.programCode} · Sem {cohort.semester} · Sec {cohort.section} · {cohort.academicYear.label}</option>)}
+                </select>
+              </div>
+            </div>
+          )}
           <div>
             <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5 ml-1">
               Description / Objectives

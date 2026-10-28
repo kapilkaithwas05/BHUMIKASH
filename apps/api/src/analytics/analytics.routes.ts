@@ -46,8 +46,14 @@ router.get(
         prisma.submission.findMany({
           take: 10,
           orderBy: { submittedAt: "desc" },
-          include: {
-            student: { select: { id: true, name: true, email: true, rollNumber: true } },
+          select: {
+            id: true,
+            submittedAt: true,
+            language: true,
+            status: true,
+            score: true,
+            totalTests: true,
+            passedTests: true,
             lab: { select: { id: true, title: true, code: true } },
             question: { select: { id: true, title: true } },
           },
@@ -121,9 +127,9 @@ router.get(
       if (role === "HOD") {
         const hod = await prisma.user.findUnique({
           where: { id: userId },
-          select: { departmentId: true },
+          select: { departmentId: true, facultyProfile: { select: { departmentId: true } } },
         });
-        departmentId = hod?.departmentId || null;
+        departmentId = hod?.facultyProfile?.departmentId ?? hod?.departmentId ?? null;
         if (!departmentId) {
           return res.status(403).json({ message: "Your account is not assigned to a department" });
         }
@@ -144,7 +150,33 @@ router.get(
 
       const department = await prisma.department.findUnique({
         where: { id: departmentId },
+        include: {
+          programs: {
+            orderBy: { name: "asc" },
+            include: {
+              cohorts: {
+                orderBy: [{ semester: "asc" }, { section: "asc" }],
+                include: {
+                  academicYear: { select: { label: true } },
+                  _count: { select: { students: true, labs: true } },
+                  labs: {
+                    orderBy: { title: "asc" },
+                    include: {
+                      facultyAssignments: { include: { faculty: { include: { user: { select: { id: true, name: true } } } } } },
+                      _count: { select: { enrollments: true } },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
       });
+      const departmentLabScope = { OR: [
+        { departmentId },
+        { createdBy: { departmentId } },
+        { createdBy: { facultyProfile: { departmentId } } },
+      ] };
 
       const [
         facultyList,
@@ -155,14 +187,36 @@ router.get(
         acceptedSubmissions,
       ] = await Promise.all([
         prisma.user.findMany({
-          where: { departmentId, role: "FACULTY" },
-          select: { id: true, name: true, email: true, createdAt: true },
+          where: { role: "FACULTY", OR: [
+            { departmentId },
+            { facultyProfile: { departmentId } },
+            { facultyProfile: { labAssignments: { some: { lab: departmentLabScope } } } },
+          ] },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            createdAt: true,
+            facultyProfile: { select: { labAssignments: { include: { lab: {
+              include: {
+                department: { select: { id: true, name: true, code: true } },
+                course: { select: { code: true, title: true } },
+                cohort: { include: { program: { select: { code: true, name: true } }, academicYear: { select: { label: true } } } },
+                facultyAssignments: { include: { faculty: { include: { user: { select: { id: true, name: true } } } } } },
+                _count: { select: { enrollments: true } },
+              },
+            } } } } },
+          },
         }),
         prisma.user.count({
-          where: { departmentId, role: "STUDENT" },
+          where: { role: "STUDENT", OR: [
+            { departmentId },
+            { studentProfile: { program: { departmentId } } },
+            { studentProfile: { cohort: { program: { departmentId } } } },
+          ] },
         }),
         prisma.lab.findMany({
-          where: { departmentId },
+          where: departmentLabScope,
           include: {
             createdBy: { select: { id: true, name: true, email: true } },
             _count: { select: { enrollments: true, questions: true, examinations: true } },
@@ -170,7 +224,7 @@ router.get(
           orderBy: { createdAt: "desc" },
         }),
         prisma.examination.findMany({
-          where: { lab: { departmentId } },
+          where: { lab: departmentLabScope },
           include: {
             lab: { select: { id: true, title: true } },
             _count: { select: { submissions: true } },
@@ -178,10 +232,10 @@ router.get(
           orderBy: { startTime: "desc" },
         }),
         prisma.submission.count({
-          where: { lab: { departmentId } },
+          where: { lab: departmentLabScope },
         }),
         prisma.submission.count({
-          where: { lab: { departmentId }, status: "ACCEPTED" },
+          where: { lab: departmentLabScope, status: "ACCEPTED" },
         }),
       ]);
 

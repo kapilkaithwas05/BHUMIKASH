@@ -13,6 +13,8 @@ import examinationRoutes from "./examinations/examination.routes";
 import analyticsRoutes from "./analytics/analytics.routes";
 import amsRoutes from "./ams/ams.routes";
 import notificationRoutes from "./notifications/notification.routes";
+import studentRoutes from "./students/student.routes";
+import academicRoutes from "./academics/academic.routes";
 
 import { authenticateToken, AuthenticatedRequest } from "./middleware/auth.middleware";
 
@@ -59,6 +61,10 @@ const apiLimiter = rateLimit({
 app.use("/api/auth", authLimiter);
 app.use("/api", apiLimiter);
 
+app.get("/api/health", (_req, res) => {
+  res.json({ status: "ok" });
+});
+
 // ── Body parsing ──────────────────────────────────────────────────────────────
 app.use(express.json({ limit: "5mb" }));
 
@@ -72,6 +78,7 @@ app.use("/api/questions", questionRoutes);
 
 // Submissions (run & submit endpoints)
 app.use("/api/questions", submissionRoutes);
+app.use("/api/submissions", submissionRoutes);
 
 // Examinations
 app.use("/api/labs/:labId/examinations", examinationRoutes);
@@ -85,6 +92,8 @@ app.use("/api/ams", amsRoutes);
 
 // Notifications
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/students", studentRoutes);
+app.use("/api/academics", academicRoutes);
 
 // Health check endpoints
 app.get("/", (_req, res) => {

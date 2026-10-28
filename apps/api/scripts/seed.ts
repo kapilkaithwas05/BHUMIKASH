@@ -111,40 +111,36 @@ async function main() {
       },
     });
 
-    // Primary Demo Student (Bhumika Pawar)
+    // Clearly fictional demo identities; never use these in institutional roster imports.
     const studentBhumika = await prisma.user.upsert({
-      where: { email: "bhumika.pawar@mitsgwalior.in" },
+      where: { email: "demo.student@labnexus.test" },
       update: {
-        name: "BHUMIKA PAWAR",
+        name: "Demo Student",
         role: "STUDENT",
-        rollNumber: "0901AD231069",
         departmentId: deptCSBS.id,
       },
       create: {
-        name: "BHUMIKA PAWAR",
-        email: "bhumika.pawar@mitsgwalior.in",
+        name: "Demo Student",
+        email: "demo.student@labnexus.test",
         passwordHash: studentPasswordHash,
         role: "STUDENT",
-        rollNumber: "0901AD231069",
         departmentId: deptCSBS.id,
       },
     });
 
-    // Developer (Vaibhav Sharma)
+    // Developer demo account; also fictional and separate from the institutional roster.
     const devVaibhav = await prisma.user.upsert({
-      where: { email: "vaibhav.sharma@mitsgwalior.in" },
+      where: { email: "demo.developer@labnexus.test" },
       update: {
-        name: "Vaibhav Sharma",
+        name: "Demo Developer",
         role: "STUDENT",
-        rollNumber: "0901AD231000",
         departmentId: deptAIDS.id,
       },
       create: {
-        name: "Vaibhav Sharma",
-        email: "vaibhav.sharma@mitsgwalior.in",
+        name: "Demo Developer",
+        email: "demo.developer@labnexus.test",
         passwordHash: studentPasswordHash,
         role: "STUDENT",
-        rollNumber: "0901AD231000",
         departmentId: deptAIDS.id,
       },
     });

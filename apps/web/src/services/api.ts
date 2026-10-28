@@ -7,7 +7,7 @@ import {
   SupportedLanguage,
 } from "../types";
 
-const API_BASE = "/api";
+const API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "") + "/api";
 
 function getToken(): string | null {
   return localStorage.getItem("labnexus_token");
@@ -84,6 +84,8 @@ export const api = {
     description?: string;
     language: string;
     departmentId?: string;
+    courseId?: string;
+    cohortId?: string;
   }): Promise<{ lab: Lab }> {
     return request("/labs", {
       method: "POST",
@@ -91,11 +93,27 @@ export const api = {
     });
   },
 
+  async getAcademicOptions(): Promise<{ homeDepartmentId: string | null; departments: Array<{
+    id: string; name: string; code: string;
+    programs: Array<{ id: string; name: string; code: string; cohorts: Array<{ id: string; semester: number; section: string; academicYear: { label: string } }> }>;
+    courses: Array<{ id: string; code: string; title: string }>;
+  }> }> {
+    return request("/academics/options");
+  },
+
   async publishLab(labId: string, isPublished: boolean): Promise<{ lab: Lab }> {
     return request(`/labs/${labId}/publish`, {
       method: "PUT",
       body: JSON.stringify({ isPublished }),
     });
+  },
+
+  async archiveLab(labId: string): Promise<{ message: string; lab: Lab }> {
+    return request(`/labs/${labId}/archive`, { method: "PATCH" });
+  },
+
+  async restoreLab(labId: string): Promise<{ message: string; lab: Lab }> {
+    return request(`/labs/${labId}/restore`, { method: "PATCH" });
   },
 
   async generateEnrollmentKey(labId: string): Promise<{ enrollmentKey: string }> {
@@ -113,6 +131,23 @@ export const api = {
 
   async getEnrolledStudents(labId: string): Promise<{ totalStudents: number; students: any[] }> {
     return request(`/labs/${labId}/students`);
+  },
+
+  async getLabFaculty(labId: string): Promise<{
+    assignedFaculty: Array<{ id: string; name: string; email: string; homeDepartment?: { name: string; code: string } | null }>;
+    faculty: Array<{ id: string; name: string; email: string; homeDepartment?: { name: string; code: string } | null }>;
+  }> {
+    return request(`/labs/${labId}/faculty`);
+  },
+
+  async updateLabFaculty(labId: string, facultyIds: string[]): Promise<{
+    message: string;
+    assignedFaculty: Array<{ id: string; name: string; email: string; homeDepartment?: { name: string; code: string } | null }>;
+  }> {
+    return request(`/labs/${labId}/faculty`, {
+      method: "PUT",
+      body: JSON.stringify({ facultyIds }),
+    });
   },
 
   async enrollStudent(labId: string, email: string): Promise<{ message: string }> {
@@ -164,6 +199,10 @@ export const api = {
     });
   },
 
+  async createSampleQuestions(labId: string): Promise<{ message: string; createdCount: number; questions: Question[] }> {
+    return request(`/labs/${labId}/questions/sample-set`, { method: "POST" });
+  },
+
   async updateQuestion(questionId: string, data: any): Promise<{ question: Question }> {
     return request(`/questions/${questionId}`, {
       method: "PUT",
@@ -213,6 +252,14 @@ export const api = {
     return request(`/questions/${questionId}/submissions`);
   },
 
+  async getSubmissions(): Promise<{ submissions: Array<Submission & {
+    student: { id: string; name: string; email: string; rollNumber?: string | null };
+    lab: { id: string; title: string; code?: string | null };
+    question: { id: string; title: string; marks: number };
+  }> }> {
+    return request("/submissions");
+  },
+
   // Examinations
   async getLabExaminations(labId: string): Promise<{ examinations: Examination[]; serverTime: string }> {
     return request(`/labs/${labId}/examinations`);
@@ -252,6 +299,21 @@ export const api = {
 
   async getAuditLogs(): Promise<{ logs: any[] }> {
     return request("/analytics/audit-logs");
+  },
+
+  async getStudents(page = 1, q = "", scope: { cohortId?: string; programId?: string } = {}): Promise<{ students: any[]; pagination: { page: number; pageSize: number; total: number; pages: number } }> {
+    const params = new URLSearchParams({ page: String(page), pageSize: "25" });
+    if (q.trim()) params.set("q", q.trim());
+    if (scope.cohortId) params.set("cohortId", scope.cohortId);
+    if (scope.programId) params.set("programId", scope.programId);
+    return request(`/students?${params.toString()}`);
+  },
+
+  async setStudentActive(id: string, isActive: boolean): Promise<void> {
+    await request(`/students/${encodeURIComponent(id)}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({ isActive }),
+    });
   },
 
   // AMS

@@ -160,8 +160,9 @@ export const Login: React.FC = () => {
               Sign in to your account
             </h2>
             <p className="mt-2 text-sm text-slate-500 dark:text-slate-400 font-medium">
-              Sign in with your LabNEXUS account email.
+              Sign in with your college email ID.
             </p>
+            <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">Students: use your institutional email ID and the password assigned to your account.</p>
           </div>
 
           <div className="bg-white dark:bg-slate-900 p-5 sm:p-8 shadow-2xl shadow-slate-200/50 dark:shadow-none rounded-[2rem] border border-slate-100 dark:border-slate-800 transition-colors duration-200">
@@ -184,7 +185,7 @@ export const Login: React.FC = () => {
                   <input
                     type="email"
                     required
-                    placeholder="you@example.edu"
+                    placeholder="your.id@mitsgwl.ac.in"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="w-full pl-11 pr-4 py-3.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white transition-all"
@@ -231,8 +232,8 @@ export const Login: React.FC = () => {
 
             <div className="grid grid-cols-2 gap-3">
               {[
-                { label: "VC", role: "VICE_CHANCELLOR", email: "vc@labnexus.edu", password: "NexusPass123!", icon: <ShieldCheck className="w-3 h-3" />, color: "text-purple-600 bg-purple-50 dark:bg-purple-950/30 border-purple-100 dark:border-purple-900/50" },
-                { label: "HOD", role: "HOD", email: "hod.csbs@labnexus.edu", password: "NexusPass123!", icon: <Building className="w-3 h-3" />, color: "text-indigo-600 bg-indigo-50 dark:bg-indigo-950/30 border-indigo-100 dark:border-indigo-900/50" },
+                { label: "VC", role: "VICE_CHANCELLOR", email: "vc@labnexus.test", password: "NexusPass123!", icon: <ShieldCheck className="w-3 h-3" />, color: "text-purple-600 bg-purple-50 dark:bg-purple-950/30 border-purple-100 dark:border-purple-900/50" },
+                { label: "HOD", role: "HOD", email: "hod.csbs@labnexus.test", password: "NexusPass123!", icon: <Building className="w-3 h-3" />, color: "text-indigo-600 bg-indigo-50 dark:bg-indigo-950/30 border-indigo-100 dark:border-indigo-900/50" },
                 { label: "Faculty", role: "FACULTY", email: "demo.faculty@labnexus.test", password: "FacultyPass123!", icon: <GraduationCap className="w-3 h-3" />, color: "text-blue-600 bg-blue-50 dark:bg-blue-950/30 border-blue-100 dark:border-blue-900/50" },
                 { label: "Student", role: "STUDENT", email: "demo.student@labnexus.test", password: "StudentPass123!", icon: <UserIcon className="w-3 h-3" />, color: "text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30 border-emerald-100 dark:border-emerald-900/50" },
               ].map((demo) => (

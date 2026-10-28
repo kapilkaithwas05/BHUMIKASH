@@ -36,6 +36,11 @@ enum SubmissionStatus {
   INTERNAL_ERROR
 }
 
+enum QuestionType {
+  DAILY
+  PRACTICE
+}
+
 model Department {
   id          String   @id @default(cuid())
   name        String
@@ -46,6 +51,136 @@ model Department {
 
   users       User[]
   labs        Lab[]
+  institutionId String?
+  institution Institution? @relation(fields: [institutionId], references: [id], onDelete: SetNull)
+  programs    Program[]
+  courses     Course[]
+  facultyProfiles FacultyProfile[]
+
+  @@index([institutionId])
+}
+
+model Institution {
+  id        String       @id @default(cuid())
+  name      String
+  code      String       @unique
+  departments Department[]
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+}
+
+model Program {
+  id           String       @id @default(cuid())
+  name         String
+  code         String
+  departmentId String
+  department   Department   @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  cohorts      Cohort[]
+  students     StudentProfile[]
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@unique([departmentId, code])
+  @@index([departmentId])
+}
+
+model AcademicYear {
+  id        String   @id @default(cuid())
+  label     String   @unique
+  startsOn  DateTime?
+  endsOn    DateTime?
+  cohorts   Cohort[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Cohort {
+  id              String       @id @default(cuid())
+  programId       String
+  academicYearId  String
+  semester        Int
+  section         String
+  program         Program      @relation(fields: [programId], references: [id], onDelete: Restrict)
+  academicYear    AcademicYear @relation(fields: [academicYearId], references: [id], onDelete: Restrict)
+  students        StudentProfile[]
+  labs            Lab[]
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@unique([programId, academicYearId, semester, section])
+  @@index([academicYearId, semester])
+}
+
+model StudentProfile {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  enrollmentNumber String   @unique
+  instituteId      String?
+  programId        String?
+  cohortId         String?
+  isActive         Boolean  @default(true)
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  program          Program? @relation(fields: [programId], references: [id], onDelete: SetNull)
+  cohort           Cohort?  @relation(fields: [cohortId], references: [id], onDelete: SetNull)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([programId])
+  @@index([cohortId])
+  @@index([isActive])
+}
+
+model FacultyProfile {
+  id           String     @id @default(cuid())
+  userId       String     @unique
+  designation  String?
+  departmentId String?
+  isActive     Boolean    @default(true)
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  department   Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  courseAssignments CourseFacultyAssignment[]
+  labAssignments LabFacultyAssignment[]
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@index([departmentId])
+}
+
+model Course {
+  id           String     @id @default(cuid())
+  code         String
+  title        String
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  labs         Lab[]
+  facultyAssignments CourseFacultyAssignment[]
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@unique([departmentId, code])
+  @@index([departmentId])
+}
+
+model CourseFacultyAssignment {
+  courseId  String
+  facultyId String
+  course    Course        @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  faculty   FacultyProfile @relation(fields: [facultyId], references: [id], onDelete: Cascade)
+  assignedAt DateTime     @default(now())
+
+  @@id([courseId, facultyId])
+  @@index([facultyId])
+}
+
+model LabFacultyAssignment {
+  labId      String
+  facultyId  String
+  lab        Lab           @relation(fields: [labId], references: [id], onDelete: Cascade)
+  faculty    FacultyProfile @relation(fields: [facultyId], references: [id], onDelete: Cascade)
+  assignedAt DateTime      @default(now())
+
+  @@id([labId, facultyId])
+  @@index([facultyId])
 }
 
 model User {
@@ -53,6 +188,7 @@ model User {
   name           String
   email          String         @unique
   passwordHash   String
+  isActive       Boolean        @default(true)
   role           Role           @default(STUDENT)
   rollNumber     String?
   departmentId   String?
@@ -65,6 +201,8 @@ model User {
   submissions    Submission[]
   notifications  Notification[]
   auditLogs      AuditLog[]
+  studentProfile StudentProfile?
+  facultyProfile FacultyProfile?
 
   @@index([departmentId])
   @@index([role])
@@ -81,6 +219,11 @@ model Lab {
 
   departmentId  String?
   department    Department?    @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  courseId      String?
+  course        Course?        @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  cohortId      String?
+  cohort        Cohort?        @relation(fields: [cohortId], references: [id], onDelete: SetNull)
+  facultyAssignments LabFacultyAssignment[]
 
   createdById   String
   createdBy     User           @relation("LabCreator", fields: [createdById], references: [id], onDelete: Restrict)
@@ -92,10 +235,14 @@ model Lab {
 
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
+  archivedAt    DateTime?      @db.Timestamp(3)
 
   @@index([departmentId])
   @@index([createdById])
+  @@index([courseId])
+  @@index([cohortId])
   @@index([isPublished])
+  @@index([archivedAt])
 }
 
 model Enrollment {
@@ -117,6 +264,10 @@ model Question {
   id                   String                @id @default(cuid())
   labId                String
   lab                  Lab                   @relation(fields: [labId], references: [id], onDelete: Cascade)
+  contentType          QuestionType          @default(PRACTICE)
+  isPublished          Boolean               @default(true)
+  availableFrom        DateTime?             @db.Timestamp(3)
+  availableUntil       DateTime?             @db.Timestamp(3)
   title                String
   description          String
   inputFormat          String?
@@ -139,6 +290,7 @@ model Question {
 
   @@index([labId])
   @@index([orderIndex])
+  @@index([isPublished, availableFrom, availableUntil])
 }
 
 model TestCase {

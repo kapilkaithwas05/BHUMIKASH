@@ -10,6 +10,12 @@
     "build:web": "npm run build --prefix apps/web",
     "build": "npm run build:api && npm run build:web",
     "seed": "npm run seed --prefix apps/api",
+    "seed:demo-accounts": "npm run seed:demo-accounts --prefix apps/api",
+    "db:validate": "npm run db:validate --prefix apps/api",
+    "db:generate": "npm run db:generate --prefix apps/api",
+    "db:migrate": "npm run db:migrate --prefix apps/api",
+    "db:deploy": "npm run db:deploy --prefix apps/api",
+    "studio": "npm run studio --prefix apps/api",
     "test:exec": "npx tsx apps/api/scripts/verify-execution.ts"
   },
   "dependencies": {

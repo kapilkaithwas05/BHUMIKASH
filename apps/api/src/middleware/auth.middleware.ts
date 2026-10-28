@@ -59,6 +59,7 @@ export async function authenticateToken(
       select: {
         id: true,
         role: true,
+        isActive: true,
       },
     });
 
@@ -66,6 +67,10 @@ export async function authenticateToken(
       return res.status(401).json({
         message: "User no longer exists",
       });
+    }
+
+    if (!user.isActive) {
+      return res.status(403).json({ message: "This account is inactive" });
     }
 
     req.user = {

@@ -199,7 +199,7 @@ router.get("/:examinationId", authenticateToken, async (req: AuthenticatedReques
 router.post(
   "/",
   authenticateToken,
-  authorizeRoles("FACULTY", "HOD", "VICE_CHANCELLOR"),
+  authorizeRoles("FACULTY"),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       const labId = getParam(req.params.labId);
@@ -295,7 +295,7 @@ router.post(
 router.put(
   "/:examinationId/publish",
   authenticateToken,
-  authorizeRoles("FACULTY", "HOD", "VICE_CHANCELLOR"),
+  authorizeRoles("FACULTY"),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       const examinationId = getParam(req.params.examinationId);

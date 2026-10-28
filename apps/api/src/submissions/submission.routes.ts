@@ -5,8 +5,66 @@ import {
   AuthenticatedRequest,
 } from "../middleware/auth.middleware";
 import { getParam } from "../lib/params";
+import { findManageableLab } from "../lib/access";
 
 const router = Router({ mergeParams: true });
+
+/* GET /api/submissions - role-scoped recent formal submissions */
+router.get("/", authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { userId, role } = req.user!;
+    let labIds: string[] | undefined;
+
+    if (role === "FACULTY") {
+      const labs = await prisma.lab.findMany({
+        where: { OR: [
+          { createdById: userId },
+          { facultyAssignments: { some: { faculty: { userId } } } },
+        ] },
+        select: { id: true },
+      });
+      labIds = labs.map(({ id }) => id);
+    } else if (role === "HOD") {
+      const hod = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { departmentId: true, facultyProfile: { select: { departmentId: true } } },
+      });
+      const departmentId = hod?.facultyProfile?.departmentId ?? hod?.departmentId;
+      const labs = await prisma.lab.findMany({
+        where: departmentId ? { OR: [
+          { departmentId },
+          { createdBy: { departmentId } },
+          { createdBy: { facultyProfile: { departmentId } } },
+        ] } : { createdById: userId },
+        select: { id: true },
+      });
+      labIds = labs.map(({ id }) => id);
+    } else if (role !== "STUDENT") {
+      return res.status(403).json({ message: "You are not allowed to view submissions" });
+    }
+
+    const submissions = await prisma.submission.findMany({
+      // Student history is always constrained to the authenticated student. Faculty
+      // history is constrained to labs they are allowed to manage.
+      where: role === "STUDENT"
+        ? { studentId: userId }
+        : labIds
+          ? { labId: { in: labIds } }
+          : {},
+      orderBy: { submittedAt: "desc" },
+      take: 50,
+      include: {
+        student: { select: { id: true, name: true, email: true, rollNumber: true } },
+        lab: { select: { id: true, title: true, code: true } },
+        question: { select: { id: true, title: true, marks: true } },
+      },
+    });
+    return res.status(200).json({ submissions });
+  } catch (error) {
+    console.error("Fetch recent submissions error:", error);
+    return res.status(500).json({ message: "Could not fetch submissions" });
+  }
+});
 
 /* POST /api/questions/:questionId/run */
 router.post("/:questionId/run", authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
@@ -63,6 +121,14 @@ router.post("/:questionId/submit", authenticateToken, async (req: AuthenticatedR
       if (!enrollment) {
         return res.status(403).json({ message: "You are not enrolled in this lab" });
       }
+
+    if (!question.lab.isPublished) {
+      return res.status(403).json({ message: "This laboratory is not published" });
+    }
+    const questionNow = new Date();
+    if (!question.isPublished || (question.availableFrom && questionNow < question.availableFrom) || (question.availableUntil && questionNow > question.availableUntil)) {
+      return res.status(403).json({ message: "This question is not currently available" });
+    }
     }
 
     // Attempt limit enforcement
@@ -180,6 +246,14 @@ router.post("/:questionId/submit", authenticateToken, async (req: AuthenticatedR
         where: { id: userId },
         select: { name: true },
       });
+      const assignedFaculty = await prisma.labFacultyAssignment.findMany({
+        where: { labId: question.labId },
+        select: { faculty: { select: { userId: true } } },
+      });
+      const facultyRecipients = [...new Set([
+        question.lab.createdById,
+        ...assignedFaculty.map(({ faculty }) => faculty.userId),
+      ])];
       const notifications = [
         {
           userId,
@@ -187,12 +261,12 @@ router.post("/:questionId/submit", authenticateToken, async (req: AuthenticatedR
           message: `"${question.title}" was submitted and is awaiting evaluation.`,
           type: "SUBMISSION",
         },
-        {
-          userId: question.lab.createdById,
+        ...facultyRecipients.map((facultyUserId) => ({
+          userId: facultyUserId,
           title: "New code submission",
           message: `${submitter?.name || "A student"} submitted "${question.title}" in ${question.lab.title}. Evaluation is pending.`,
           type: "SUBMISSION",
-        },
+        })),
       ];
       await prisma.notification.createMany({ data: notifications });
     } catch (notifyError) {
@@ -228,17 +302,31 @@ router.get("/:questionId/submissions", authenticateToken, async (req: Authentica
       return res.status(404).json({ message: "Question not found" });
     }
 
-    if (role === "FACULTY" && question.lab.createdById !== userId) {
+    if (!["STUDENT", "FACULTY", "HOD"].includes(role)) {
+      return res.status(403).json({ message: "You are not allowed to view submissions" });
+    }
+
+    if (role === "STUDENT") {
+      const enrollment = await prisma.enrollment.findUnique({
+        where: { studentId_labId: { studentId: userId, labId: question.labId } },
+      });
+      if (!question.lab.isPublished || !enrollment) {
+        return res.status(403).json({ message: "You do not have access to this laboratory" });
+      }
+    }
+
+    if (role === "FACULTY" && !await findManageableLab(question.labId, req.user!)) {
       return res.status(403).json({ message: "You may only review submissions for your own labs" });
     }
     if (role === "HOD") {
-      const hod = await prisma.user.findUnique({ where: { id: userId }, select: { departmentId: true } });
+      const hod = await prisma.user.findUnique({ where: { id: userId }, select: { departmentId: true, facultyProfile: { select: { departmentId: true } } } });
+      const departmentId = hod?.facultyProfile?.departmentId ?? hod?.departmentId;
       const lab = await prisma.lab.findUnique({
         where: { id: question.labId },
-        select: { departmentId: true, createdBy: { select: { departmentId: true } } },
+        select: { departmentId: true, createdBy: { select: { departmentId: true, facultyProfile: { select: { departmentId: true } } } } },
       });
-      const hasDepartmentAccess = Boolean(hod?.departmentId && lab && (
-        lab.departmentId === hod.departmentId || lab.createdBy.departmentId === hod.departmentId
+      const hasDepartmentAccess = Boolean(departmentId && lab && (
+        lab.departmentId === departmentId || lab.createdBy.departmentId === departmentId || lab.createdBy.facultyProfile?.departmentId === departmentId
       ));
       if (!hasDepartmentAccess) {
         return res.status(403).json({ message: "You may only review submissions in your department" });

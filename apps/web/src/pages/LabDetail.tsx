@@ -25,6 +25,8 @@ import {
   TrendingUp,
 } from "lucide-react";
 
+type LabFacultyMember = { id: string; name: string; email: string; homeDepartment?: { name: string; code: string } | null };
+
 export const LabDetail: React.FC = () => {
   const { labId } = useParams<{ labId: string }>();
   const { user } = useAuth();
@@ -35,7 +37,11 @@ export const LabDetail: React.FC = () => {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [examinations, setExaminations] = useState<Examination[]>([]);
   const [students, setStudents] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState<"questions" | "exams" | "students">("questions");
+  const [activeTab, setActiveTab] = useState<"questions" | "exams" | "students" | "faculty">("questions");
+  const [assignedFaculty, setAssignedFaculty] = useState<LabFacultyMember[]>([]);
+  const [facultyOptions, setFacultyOptions] = useState<LabFacultyMember[]>([]);
+  const [selectedFacultyIds, setSelectedFacultyIds] = useState<string[]>([]);
+  const [savingFaculty, setSavingFaculty] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // Key copied status
@@ -46,9 +52,16 @@ export const LabDetail: React.FC = () => {
   const [isExamModalOpen, setIsExamModalOpen] = useState(false);
   const [isEnrollModalOpen, setIsEnrollModalOpen] = useState(false);
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isArchiving, setIsArchiving] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(false);
 
   // Question Form State
   const [qTitle, setQTitle] = useState("");
+  const [qContentType, setQContentType] = useState<"DAILY" | "PRACTICE">("PRACTICE");
+  const [qPublished, setQPublished] = useState(true);
+  const [qAvailableFrom, setQAvailableFrom] = useState("");
+  const [qAvailableUntil, setQAvailableUntil] = useState("");
   const [qDesc, setQDesc] = useState("");
   const [qDiff, setQDiff] = useState<"EASY" | "MEDIUM" | "HARD">("EASY");
   const [qMarks, setQMarks] = useState(10);
@@ -61,6 +74,9 @@ export const LabDetail: React.FC = () => {
     { input: "", expectedOutput: "", isHidden: true, explanation: "Hidden test case" },
   ]);
   const [qLoading, setQLoading] = useState(false);
+  const [qError, setQError] = useState<string | null>(null);
+  const [sampleLoading, setSampleLoading] = useState(false);
+  const [sampleMessage, setSampleMessage] = useState<string | null>(null);
 
   // Exam Form State
   const [examTitle, setExamTitle] = useState("");
@@ -97,6 +113,10 @@ export const LabDetail: React.FC = () => {
       if (isInstructor) {
         const stRes = await api.getEnrolledStudents(labId).catch(() => ({ totalStudents: 0, students: [] }));
         setStudents(stRes.students);
+        const facultyRes = await api.getLabFaculty(labId).catch(() => ({ assignedFaculty: [], faculty: [] }));
+        setAssignedFaculty(facultyRes.assignedFaculty);
+        setFacultyOptions(facultyRes.faculty);
+        setSelectedFacultyIds(facultyRes.assignedFaculty.map((member) => member.id));
       }
     } catch (err) {
       console.error("Load lab error:", err);
@@ -144,6 +164,10 @@ export const LabDetail: React.FC = () => {
     try {
       await api.createQuestion(labId, {
         title: qTitle,
+        contentType: qContentType,
+        isPublished: qPublished,
+        availableFrom: qAvailableFrom ? new Date(qAvailableFrom).toISOString() : null,
+        availableUntil: qAvailableUntil ? new Date(qAvailableUntil).toISOString() : null,
         description: qDesc,
         difficulty: qDiff,
         marks: qMarks,
@@ -154,11 +178,63 @@ export const LabDetail: React.FC = () => {
       setIsQuestionModalOpen(false);
       setQTitle("");
       setQDesc("");
+      setQError(null);
+      setQContentType("PRACTICE");
+      setQPublished(true);
+      setQAvailableFrom("");
+      setQAvailableUntil("");
       fetchLabData();
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      setQError(err?.message || "Could not create the question. Check the details and try again.");
     } finally {
       setQLoading(false);
+    }
+  };
+
+  const handleAddSampleQuestions = async () => {
+    if (!labId) return;
+    setSampleLoading(true);
+    setSampleMessage(null);
+    try {
+      const result = await api.createSampleQuestions(labId);
+      setSampleMessage(result.createdCount
+        ? `Added ${result.createdCount} starter practice question${result.createdCount === 1 ? "" : "s"}.`
+        : "The starter practice set is already in this lab.");
+      await fetchLabData();
+    } catch (error: any) {
+      setSampleMessage(error?.message || "Could not add the starter questions.");
+    } finally {
+      setSampleLoading(false);
+    }
+  };
+
+  const handleArchiveLab = async () => {
+    if (!labId) return;
+    setIsArchiving(true);
+    try {
+      const result = await api.archiveLab(labId);
+      setLab(result.lab);
+      setIsDeleteModalOpen(false);
+      window.dispatchEvent(new Event("labnexus:labs-changed"));
+    } catch (error: any) {
+      alert(error?.message || "Could not archive this laboratory.");
+    } finally {
+      setIsArchiving(false);
+    }
+  };
+
+  const handleRestoreLab = async () => {
+    if (!labId) return;
+    setIsRestoring(true);
+    try {
+      const result = await api.restoreLab(labId);
+      setLab(result.lab);
+      window.dispatchEvent(new Event("labnexus:labs-changed"));
+    } catch (error: any) {
+      alert(error?.message || "Could not restore this laboratory.");
+    } finally {
+      setIsRestoring(false);
     }
   };
 
@@ -220,6 +296,21 @@ export const LabDetail: React.FC = () => {
     }
   };
 
+  const canEditFacultyTeam = user?.role === "HOD" || (user?.role === "FACULTY" && lab?.createdById === user.id);
+  const handleSaveFacultyTeam = async () => {
+    if (!labId) return;
+    setSavingFaculty(true);
+    try {
+      const result = await api.updateLabFaculty(labId, selectedFacultyIds);
+      setAssignedFaculty(result.assignedFaculty);
+      alert(result.message);
+    } catch (error: any) {
+      alert(error.message || "Could not update the teaching team");
+    } finally {
+      setSavingFaculty(false);
+    }
+  };
+
   if (loading) return (
     <div className="flex flex-col items-center justify-center min-h-[400px] gap-3">
       <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
@@ -235,6 +326,14 @@ export const LabDetail: React.FC = () => {
       <Link to="/" className="btn-primary mt-6 inline-flex">Back to Dashboard</Link>
     </div>
   );
+
+  const academicContext = [
+    lab.cohort?.program?.code,
+    lab.cohort ? `Semester ${lab.cohort.semester}` : null,
+    lab.cohort?.section ? `Section ${lab.cohort.section}` : null,
+    lab.cohort?.academicYear?.label,
+    lab.course?.code,
+  ].filter(Boolean).join(" · ");
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-12">
@@ -277,35 +376,50 @@ export const LabDetail: React.FC = () => {
             <p className="text-slate-500 dark:text-slate-400 text-lg font-medium leading-relaxed">
               {lab.description || "Master core concepts through practical hands-on laboratory sessions."}
             </p>
+            {academicContext && <p className="text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">{academicContext}</p>}
           </div>
 
           {/* Instructor Quick Actions */}
           {isInstructor && (
             <div className="flex flex-col sm:flex-row lg:flex-col gap-3 shrink-0 w-full sm:w-auto">
-              <button
-                onClick={handleTogglePublish}
-                className={`w-full px-6 py-3 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all shadow-lg active:scale-95 ${
-                  lab.isPublished
-                    ? "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700"
-                    : "bg-emerald-600 text-white hover:bg-emerald-700 shadow-emerald-500/20"
-                }`}
-              >
-                {lab.isPublished ? "Unpublish Lab" : "Publish to Students"}
-              </button>
-              <div className="flex gap-2 w-full">
+              {lab.archivedAt ? (
+                <div className="space-y-2">
+                  <p className="rounded-xl bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-800">This lab is archived. Its submissions and records are preserved.</p>
+                  <button onClick={handleRestoreLab} disabled={isRestoring} className="w-full rounded-2xl bg-emerald-600 px-6 py-3 text-[11px] font-black uppercase tracking-widest text-white disabled:opacity-50">
+                    {isRestoring ? "Restoring…" : "Restore Lab"}
+                  </button>
+                </div>
+              ) : <>
                 <button
-                  onClick={() => setIsQuestionModalOpen(true)}
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest shadow-lg shadow-indigo-500/20 transition-all active:scale-95"
+                  onClick={handleTogglePublish}
+                  className={`w-full px-6 py-3 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all shadow-lg active:scale-95 ${
+                    lab.isPublished
+                      ? "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700"
+                      : "bg-emerald-600 text-white hover:bg-emerald-700 shadow-emerald-500/20"
+                  }`}
                 >
-                  <Plus className="w-4 h-4" /> Add Question
+                  {lab.isPublished ? "Unpublish Lab" : "Publish to Students"}
                 </button>
-                <button
-                  onClick={() => setIsExamModalOpen(true)}
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-slate-900 dark:bg-white dark:text-slate-900 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest shadow-lg transition-all active:scale-95"
-                >
-                  <Calendar className="w-4 h-4" /> Schedule Exam
-                </button>
-              </div>
+                <div className="flex gap-2 w-full">
+                  <button
+                    onClick={() => { setQError(null); setIsQuestionModalOpen(true); }}
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest shadow-lg shadow-indigo-500/20 transition-all active:scale-95"
+                  >
+                    <Plus className="w-4 h-4" /> Add Question
+                  </button>
+                  <button
+                    onClick={() => setIsExamModalOpen(true)}
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-slate-900 dark:bg-white dark:text-slate-900 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest shadow-lg transition-all active:scale-95"
+                  >
+                    <Calendar className="w-4 h-4" /> Schedule Exam
+                  </button>
+                </div>
+                {user && (user.role !== "FACULTY" || lab.createdById === user.id) ? (
+                  <button onClick={() => setIsDeleteModalOpen(true)} className="flex w-full items-center justify-center gap-2 rounded-2xl border border-rose-200 px-4 py-3 text-[11px] font-black uppercase tracking-widest text-rose-600 transition-colors hover:bg-rose-50 dark:border-rose-900 dark:hover:bg-rose-950/30">
+                    <Trash2 className="w-4 h-4" /> Delete Lab
+                  </button>
+                ) : null}
+              </>}
             </div>
           )}
         </div>
@@ -390,7 +504,19 @@ export const LabDetail: React.FC = () => {
                 : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
             }`}
           >
-            Roster ({students.length})
+            Students enrolled ({students.length})
+          </button>
+        )}
+        {isInstructor && (
+          <button
+            onClick={() => setActiveTab("faculty")}
+            className={`px-6 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${
+              activeTab === "faculty"
+                ? "bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-lg shadow-slate-200/50 dark:shadow-none"
+                : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+            }`}
+          >
+            Teaching team ({assignedFaculty.length})
           </button>
         )}
       </div>
@@ -410,7 +536,15 @@ export const LabDetail: React.FC = () => {
                   {isInstructor ? "Kickstart the learning by adding your first coding challenge." : "Your instructor hasn't published any questions yet."}
                 </p>
                 {isInstructor && (
-                  <button onClick={() => setIsQuestionModalOpen(true)} className="btn-primary mt-6 inline-flex">Add New Question</button>
+                  <div className="mt-6 flex flex-col items-center gap-3">
+                    <div className="flex flex-wrap justify-center gap-3">
+                      <button onClick={() => { setQError(null); setIsQuestionModalOpen(true); }} className="btn-primary inline-flex">Add New Question</button>
+                      <button onClick={handleAddSampleQuestions} disabled={sampleLoading || Boolean(lab.archivedAt)} className="inline-flex items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-5 py-3 text-xs font-black uppercase tracking-wider text-indigo-700 hover:bg-indigo-100 disabled:opacity-50">
+                        <Code2 className="h-4 w-4" /> {sampleLoading ? "Adding Questions…" : "Add Starter Questions"}
+                      </button>
+                    </div>
+                    {sampleMessage && <p role="status" className="text-xs font-semibold text-slate-600">{sampleMessage}</p>}
+                  </div>
                 )}
               </div>
             ) : (
@@ -434,6 +568,9 @@ export const LabDetail: React.FC = () => {
                         {q.difficulty}
                       </span>
                     </div>
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-indigo-600 dark:text-indigo-400">
+                      {q.contentType === "DAILY" ? "Daily lab question" : "Practice question"}{isInstructor ? ` · ${q.isPublished ? "Published" : "Draft"}` : ""}
+                    </p>
                     
                     <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase leading-none group-hover:text-indigo-600 transition-colors">
                       {q.title}
@@ -542,12 +679,35 @@ export const LabDetail: React.FC = () => {
           </div>
         )}
 
+        {activeTab === "faculty" && isInstructor && (
+          <div className="portal-card space-y-5 border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900 sm:p-8">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">Teaching team</h3>
+                <p className="mt-1 text-sm text-slate-500">Faculty can be assigned across departments. Student enrollment remains specific to this lab.</p>
+              </div>
+              {canEditFacultyTeam && <button onClick={handleSaveFacultyTeam} disabled={savingFaculty} className="btn-primary disabled:opacity-50">{savingFaculty ? "Saving…" : "Save teaching team"}</button>}
+            </div>
+            {facultyOptions.length === 0 ? <p className="text-sm text-slate-500">No active faculty profiles are available to assign.</p> : (
+              <div className="grid gap-3 sm:grid-cols-2">
+                {facultyOptions.map((member) => {
+                  const assigned = selectedFacultyIds.includes(member.id);
+                  return <label key={member.id} className={`flex items-start gap-3 rounded-xl border p-4 ${canEditFacultyTeam ? "cursor-pointer" : "cursor-default"} ${assigned ? "border-indigo-300 bg-indigo-50/70 dark:border-indigo-800 dark:bg-indigo-950/30" : "border-slate-200 dark:border-slate-800"}`}>
+                    <input type="checkbox" checked={assigned} disabled={!canEditFacultyTeam} onChange={(event) => setSelectedFacultyIds((current) => event.target.checked ? [...current, member.id] : current.filter((id) => id !== member.id))} className="mt-1 rounded text-indigo-600" />
+                    <span className="min-w-0"><strong className="block text-sm text-slate-900 dark:text-white">{member.name}</strong><span className="block text-xs text-slate-500">{member.email}</span><span className="block text-xs text-slate-500">Home department: {member.homeDepartment?.code || member.homeDepartment?.name || "Not assigned"}</span></span>
+                  </label>;
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Tab 3: Student Roster */}
         {activeTab === "students" && isInstructor && (
           <div className="portal-card p-0 border-none overflow-hidden bg-white dark:bg-slate-900 shadow-2xl shadow-slate-200/50 dark:shadow-none ring-1 ring-slate-200 dark:ring-slate-800">
             <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/50">
               <div>
-                <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">Student Roster</h3>
+                <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">Students enrolled</h3>
                 <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mt-0.5">Academic Session 2026-27</p>
               </div>
               <div className="px-4 py-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 text-[11px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest shadow-sm">
@@ -560,6 +720,9 @@ export const LabDetail: React.FC = () => {
                   <tr className="bg-slate-50/50 dark:bg-slate-800/30 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.15em] border-b border-slate-100 dark:border-slate-800">
                     <th className="py-4 px-8">Full Name</th>
                     <th className="py-4 px-8">Roll Number</th>
+                    <th className="py-4 px-8">Branch</th>
+                    <th className="py-4 px-8">Section</th>
+                    <th className="py-4 px-8">Semester</th>
                     <th className="py-4 px-8">Institutional Email</th>
                     <th className="py-4 px-8">Status</th>
                     <th className="py-4 px-8 text-right">Control</th>
@@ -577,6 +740,9 @@ export const LabDetail: React.FC = () => {
                         </div>
                       </td>
                       <td className="py-5 px-8 font-mono text-xs tracking-widest text-slate-500 dark:text-slate-400">{st.rollNumber || "NOT_ASSIGNED"}</td>
+                      <td className="py-5 px-8 text-xs text-slate-500 dark:text-slate-400">{st.studentProfile?.program?.code || st.studentProfile?.program?.name || "—"}</td>
+                      <td className="py-5 px-8 text-xs text-slate-500 dark:text-slate-400">{st.studentProfile?.cohort?.section || "—"}</td>
+                      <td className="py-5 px-8 text-xs text-slate-500 dark:text-slate-400">{st.studentProfile?.cohort?.semester ?? "—"}</td>
                       <td className="py-5 px-8 text-xs font-medium text-slate-500 dark:text-slate-400">{st.email}</td>
                       <td className="py-5 px-8">
                         <span className="px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 text-[9px] font-black uppercase tracking-widest ring-1 ring-emerald-200 dark:ring-emerald-800">
@@ -605,6 +771,25 @@ export const LabDetail: React.FC = () => {
         )}
       </div>
 
+      <Modal
+        isOpen={isDeleteModalOpen}
+        onClose={() => !isArchiving && setIsDeleteModalOpen(false)}
+        title="Delete laboratory?"
+        maxWidth="md"
+      >
+        <div className="space-y-4">
+          <p className="text-sm leading-6 text-slate-600">
+            “{lab.title}” will be removed from the student workspace and unpublished. Its questions, enrollments, and submissions will be kept so you can restore the lab later.
+          </p>
+          <div className="flex justify-end gap-3 pt-2">
+            <button type="button" onClick={() => setIsDeleteModalOpen(false)} disabled={isArchiving} className="rounded-lg px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-50">Cancel</button>
+            <button type="button" onClick={handleArchiveLab} disabled={isArchiving} className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-bold text-white hover:bg-rose-700 disabled:opacity-50">
+              {isArchiving ? "Archiving…" : "Delete Lab"}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
       {/* Create Question Modal */}
       <Modal
         isOpen={isQuestionModalOpen}
@@ -613,6 +798,7 @@ export const LabDetail: React.FC = () => {
         maxWidth="2xl"
       >
         <form onSubmit={handleCreateQuestion} className="space-y-4">
+          {qError && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">{qError}</p>}
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">Question Title *</label>
             <input
@@ -623,6 +809,28 @@ export const LabDetail: React.FC = () => {
               onChange={(e) => setQTitle(e.target.value)}
               className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Content type</label>
+              <select value={qContentType} onChange={(event) => setQContentType(event.target.value as "DAILY" | "PRACTICE")} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
+                <option value="PRACTICE">Practice question</option>
+                <option value="DAILY">Daily lab question</option>
+              </select>
+            </div>
+            <label className="flex items-center gap-2 self-end rounded-lg border border-slate-200 px-3 py-2 text-sm">
+              <input type="checkbox" checked={qPublished} onChange={(event) => setQPublished(event.target.checked)} />
+              Publish to enrolled students
+            </label>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Available from (optional)</label>
+              <input type="datetime-local" value={qAvailableFrom} onChange={(event) => setQAvailableFrom(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Available until (optional)</label>
+              <input type="datetime-local" value={qAvailableUntil} onChange={(event) => setQAvailableUntil(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+            </div>
           </div>
 
           <div className="grid grid-cols-3 gap-3">
@@ -910,15 +1118,18 @@ export const LabDetail: React.FC = () => {
             </div>
           )}
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">Student University Email *</label>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">Student College Email ID *</label>
             <input
               type="email"
               required
-              placeholder="csbs.student01@mitsgwl.ac.in"
+              pattern="[^\s@]+@mitsgwl\.ac\.in"
+              title="Use a student email ending in @mitsgwl.ac.in"
+              placeholder="25cb1bh42@mitsgwl.ac.in"
               value={studentEmail}
               onChange={(e) => setStudentEmail(e.target.value)}
               className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
             />
+            <p className="mt-1 text-xs text-slate-500">Student IDs may vary before @; all college IDs use @mitsgwl.ac.in.</p>
           </div>
           <div className="flex justify-end gap-2">
             <button
@@ -947,7 +1158,7 @@ export const LabDetail: React.FC = () => {
       >
         <form onSubmit={handleBulkUpload} className="space-y-4">
           <p className="text-xs text-slate-500">
-            Upload a <strong>.CSV</strong> or <strong>.XLSX</strong> spreadsheet containing student email addresses.
+            Upload a <strong>.CSV</strong> or <strong>.XLSX</strong> spreadsheet containing student college email IDs ending in <strong>@mitsgwl.ac.in</strong>.
             The system will automatically validate format, prevent duplicate enrollments, and report unrecognized records.
           </p>
 

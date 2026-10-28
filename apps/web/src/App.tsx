@@ -5,7 +5,8 @@ import { Navbar } from "./components/Navbar";
 import { Sidebar } from "./components/Sidebar";
 import { Login } from "./pages/Login";
 import { Register } from "./pages/Register";
-import { Dashboard } from "./pages/Dashboard";
+import { PortalDashboard } from "./pages/PortalDashboard";
+import { AssessmentCatalog } from "./pages/AssessmentCatalog";
 import { LabDetail } from "./pages/LabDetail";
 import { QuestionWorkspace } from "./pages/QuestionWorkspace";
 import { ExaminationRoom } from "./pages/ExaminationRoom";
@@ -13,6 +14,7 @@ import { ExaminationResults } from "./pages/ExaminationResults";
 import { Profile } from "./pages/Profile";
 import { Notifications } from "./pages/Notifications";
 import { Developer } from "./pages/Developer";
+import { Students } from "./pages/Students";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -58,7 +60,7 @@ export const App: React.FC = () => {
   const isAuthPage = location.pathname === "/login" || location.pathname === "/register";
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-200">
+    <div className={`min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-200 ${!isAuthPage && !isFullscreenWorkspace ? "portal-app" : ""}`}>
       {!isAuthPage && !isFullscreenWorkspace && <Navbar />}
 
       {isAuthPage || isFullscreenWorkspace ? (
@@ -86,7 +88,7 @@ export const App: React.FC = () => {
           </Routes>
         </main>
       ) : (
-        <div className="flex flex-1 max-w-7xl w-full mx-auto">
+        <div className="portal-layout flex flex-1 max-w-[1600px] w-full mx-auto">
           {user && <Sidebar />}
           <main className="flex-1 p-6 sm:p-8 overflow-y-auto">
             <Routes>
@@ -94,7 +96,7 @@ export const App: React.FC = () => {
                 path="/"
                 element={
                   <ProtectedRoute>
-                    <Dashboard />
+                    <PortalDashboard />
                   </ProtectedRoute>
                 }
               />
@@ -103,6 +105,22 @@ export const App: React.FC = () => {
                 element={
                   <ProtectedRoute>
                     <LabDetail />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/labs"
+                element={
+                  <ProtectedRoute>
+                    <AssessmentCatalog kind="labs" />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/examinations"
+                element={
+                  <ProtectedRoute>
+                    <AssessmentCatalog kind="examinations" />
                   </ProtectedRoute>
                 }
               />
@@ -138,6 +156,7 @@ export const App: React.FC = () => {
                   </ProtectedRoute>
                 }
               />
+              <Route path="/students" element={<ProtectedRoute><Students /></ProtectedRoute>} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </main>

@@ -39,8 +39,18 @@ export interface Lab {
   language: LabLanguage;
   enrollmentKey?: string | null;
   isPublished: boolean;
+  archivedAt?: string | null;
   departmentId?: string | null;
   department?: Department | null;
+  course?: { id: string; code: string; title: string; department?: Department | null } | null;
+  cohort?: {
+    id: string;
+    semester: number;
+    section: string;
+    academicYear?: { label: string };
+    program?: { id: string; code: string; name: string; department?: Department | null };
+  } | null;
+  facultyAssignments?: Array<{ faculty: { user: { id: string; name: string; email?: string } } }>;
   createdById: string;
   createdBy?: { id: string; name: string; email?: string } | null;
   _count?: {
@@ -64,6 +74,10 @@ export interface Question {
   id: string;
   labId: string;
   title: string;
+  contentType: "DAILY" | "PRACTICE";
+  isPublished: boolean;
+  availableFrom?: string | null;
+  availableUntil?: string | null;
   description: string;
   inputFormat?: string | null;
   outputFormat?: string | null;

@@ -50,10 +50,45 @@ function killProcessTree(pid: number): Promise<void> {
 }
 
 export class ExecutionService {
-  private static pythonCmd: string = process.platform === "win32" ? "py" : "python3";
+  private static async getPythonCommand(): Promise<string> {
+    const configuredCommand = process.env.PYTHON_EXECUTABLE?.trim();
+    if (configuredCommand) {
+      return configuredCommand.replace(/^"(.*)"$/, "$1");
+    }
+
+    if (process.platform !== "win32") {
+      return "python3";
+    }
+
+    // The Windows py launcher can be installed without a registered interpreter.
+    // Check the standard per-user install folder before falling back to that launcher.
+    const localPrograms = path.join(os.homedir(), "AppData", "Local", "Programs", "Python");
+    try {
+      const installations = await fs.readdir(localPrograms, { withFileTypes: true });
+      const candidates = installations
+        .filter((entry) => entry.isDirectory() && /^Python\d+$/i.test(entry.name))
+        .sort((left, right) => right.name.localeCompare(left.name, undefined, { numeric: true }));
+
+      for (const installation of candidates) {
+        const interpreter = path.join(localPrograms, installation.name, "python.exe");
+        try {
+          await fs.access(interpreter);
+          return interpreter;
+        } catch {
+          // Try the next discovered installation.
+        }
+      }
+    } catch {
+      // Use the standard launcher below when no per-user installation is present.
+    }
+
+    return "py";
+  }
 
   /**
-   * Executes untrusted code inside an isolated temporary directory with strict time limits.
+   * Runs code in a temporary working directory with a time limit. This is not a security
+   * sandbox: it still runs with the API host user's operating-system permissions and must
+   * not be exposed to untrusted student code without an external isolation layer.
    *
    * Cold-start tolerance: the first spawns of a compiler/runtime and of a freshly written
    * binary after an idle period can take several seconds on a shared Windows host (antivirus
@@ -131,7 +166,8 @@ export class ExecutionService {
     const scriptPath = path.join(tempDir, "solution.py");
     await fs.writeFile(scriptPath, sourceCode, "utf8");
 
-    return this.runProcess(this.pythonCmd, ["-u", scriptPath], stdin, tempDir, timeLimitMs);
+    const pythonCommand = await this.getPythonCommand();
+    return this.runProcess(pythonCommand, ["-u", scriptPath], stdin, tempDir, timeLimitMs);
   }
 
   private static async executeC(

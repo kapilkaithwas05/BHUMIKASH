@@ -11,9 +11,9 @@ export type StudentListParseResult = {
   }>;
 };
 
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const EMAIL_PATTERN = /^[^\s@]+@mitsgwl\.ac\.in$/i;
 
-function normalizeEmail(value: unknown): string | null {
+export function normalizeStudentEmail(value: unknown): string | null {
   if (typeof value !== "string" && typeof value !== "number") {
     return null;
   }
@@ -59,12 +59,12 @@ function parseRows(rows: unknown[][]): StudentListParseResult {
       continue;
     }
 
-    const email = normalizeEmail(emailValue);
+    const email = normalizeStudentEmail(emailValue);
 
     if (!email) {
       invalidRows.push({
         row: rowNumber,
-        reason: "Invalid email address",
+        reason: "Use a college email ID ending in @mitsgwl.ac.in",
       });
       continue;
     }

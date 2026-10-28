@@ -98,20 +98,33 @@ flowchart TD
 
 ## 🔑 Demo Accounts
 
-The project includes an institutional seed script pre-populating departments, faculty, students, sample labs, questions, and an ongoing examination:
+For local development only, seed fictional demo accounts using `npm run seed:demo-accounts` after the CSBS department exists. Quick Access uses these accounts:
 
 | Role | Email Address | Password | Permissions Scope |
 |---|---|---|---|
-| **Vice Chancellor** | `vc@labnexus.edu` | `NexusPass123!` | Institutional Analytics & Audit Logs |
-| **HOD (CSBS)** | `hod.csbs@labnexus.edu` | `NexusPass123!` | Department-scoped monitoring & labs |
+| **Vice Chancellor** | `vc@labnexus.test` | `NexusPass123!` | Institutional monitoring |
+| **HOD (CSBS)** | `hod.csbs@labnexus.test` | `NexusPass123!` | Department-scoped monitoring |
 | **Faculty** | `demo.faculty@labnexus.test` | `FacultyPass123!` | Lab management & question authoring |
 | **Student** | `demo.student@labnexus.test` | `StudentPass123!` | Coding workspace & examination room |
 
-*Note: The login page also features one-click demo login buttons for rapid switching.*
+*These are local demo credentials, not institutional accounts. The login page has one-click demo login buttons. The demo account script does not import roster records.*
 
 ---
 
 ## 🚀 Getting Started
+
+## 🌐 Deploy a mentor demo (Render)
+
+This repository includes a Render Blueprint for the web app, API, and PostgreSQL database. To create a live demo:
+
+1. Push the project to a GitHub repository. A deployment uses the files committed and pushed to GitHub; uncommitted local changes are not included.
+2. In Render, create a new **Blueprint** and select this repository. Review the `labnexus-db`, `labnexus-api`, and `labnexus-web` resources before applying. The current free Render Postgres plan expires after 30 days, so treat it as a short evaluation demo and check current plan and pricing details before creating resources.
+3. After the API and web services are created, set `CORS_ORIGIN` on `labnexus-api` to the web service's full public URL (for example, `https://labnexus-web.onrender.com`). Set `VITE_API_URL` on `labnexus-web` to the API service's full public URL (for example, `https://labnexus-api.onrender.com`), with no trailing slash. Save both values and redeploy the web service so the frontend build uses the API URL.
+4. The API Blueprint generates a `JWT_SECRET` and uses Render's database connection string. It installs the API dependencies, builds the Prisma client, applies checked-in migrations, and starts the API. Do not put production credentials in this repository.
+5. Once the API is healthy, optionally initialize the database from a trusted environment using `npm run seed --prefix apps/api` with the production `DATABASE_URL` securely configured. The main seed includes institutional demo data. Avoid running local demo-account credentials on a public site unless you intentionally want anyone with those credentials to access the demo.
+6. Share the `labnexus-web` public URL with your mentor. Pushing later commits to the connected GitHub branch triggers automatic deployments; if auto-deploy is disabled, start a deploy from Render. Database migrations run before API deployment.
+
+Render plan availability, pricing, and service behavior can change; review the current plan details in Render before creating resources. This hosted demo does not configure isolated code execution, so code running remains unavailable by design.
 
 ### Prerequisites
 - **Node.js**: v18.0.0 or higher (v24 recommended)
@@ -145,17 +158,27 @@ The project includes an institutional seed script pre-populating departments, fa
 
 3. **Database Migration & Seed**
    ```bash
-   # Synchronize schema to PostgreSQL
+   # Apply the checked-in, additive migrations
    cd apps/api
-   npx prisma db push
-   npx prisma generate
+   npm run db:validate
+   npm run db:deploy
+   npm run db:generate
 
    # Seed institutional data
    npm run seed
    cd ../..
    ```
 
-4. **Run the Application**
+   For local schema development, use `npm run db:migrate` from `apps/api`; this creates a migration and applies it to the configured development database. Do not use `db push` where preserving existing data and migration history matters.
+
+4. **Inspect development data with Prisma Studio**
+   ```bash
+   cd apps/api
+   npm run studio
+   ```
+   Prisma Studio uses the same `DATABASE_URL` from `apps/api/.env`. Stop it with Ctrl+C. Studio is intended for local development and is not the production admin interface.
+
+5. **Run the Application**
    Start PostgreSQL and make sure `apps/api/.env` has a valid `DATABASE_URL` and `JWT_SECRET`. Then run both services together:
 
    ```bash
@@ -176,7 +199,7 @@ The project includes an institutional seed script pre-populating departments, fa
    # Portal will run on http://localhost:3000
    ```
 
-5. **Run Verification & Engine Tests**
+6. **Run Verification & Engine Tests**
    ```bash
    npm run test:exec
    # Tests Python, C compilation, timeout termination, and evaluation engine.

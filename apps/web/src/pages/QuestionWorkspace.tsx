@@ -1,25 +1,39 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
-import Editor from "@monaco-editor/react";
 import { api } from "../services/api";
 import { Question, Submission, SupportedLanguage } from "../types";
 import { Badge } from "../components/Badge";
 import {
-  Play,
   Send,
   RotateCcw,
-  Clock,
-  Cpu,
   CheckCircle2,
   XCircle,
   AlertTriangle,
-  Terminal,
   FileCode,
   ArrowLeft,
-  Settings2,
-  Copy,
   History,
 } from "lucide-react";
+
+const ONECOMPILER_ORIGIN = "https://onecompiler.com";
+const LAB_LANGUAGE_BY_EMBED_LANGUAGE: Record<string, SupportedLanguage | undefined> = {
+  c: "C",
+  cpp: "CPP",
+  java: "JAVA",
+  python: "PYTHON",
+};
+
+function getEmbedLanguage(language: SupportedLanguage): string {
+  return language.toLowerCase();
+}
+
+function getEmbedFileName(language: SupportedLanguage): string {
+  switch (language) {
+    case "C": return "main.c";
+    case "CPP": return "main.cpp";
+    case "JAVA": return "Main.java";
+    case "PYTHON": return "main.py";
+  }
+}
 
 export const QuestionWorkspace: React.FC = () => {
   const { questionId } = useParams<{ questionId: string }>();
@@ -27,34 +41,61 @@ export const QuestionWorkspace: React.FC = () => {
   const [question, setQuestion] = useState<Question | null>(null);
   const [sourceCode, setSourceCode] = useState<string>("");
   const [language, setLanguage] = useState<string>("PYTHON");
-  const [editorTheme, setEditorTheme] = useState<"vs-dark" | "light">("vs-dark");
-  const [fontSize, setFontSize] = useState<number>(14);
+  const [compilerStatus, setCompilerStatus] = useState<"loading" | "ready" | "error">("loading");
+  const compilerFrameRef = useRef<HTMLIFrameElement>(null);
 
   // Console State
-  const [consoleTab, setConsoleTab] = useState<"output" | "customInput" | "verdict" | "history">("output");
-  const [customInput, setCustomInput] = useState<string>("");
-  const [runOutput, setRunOutput] = useState<{
-    status: string;
-    stdout: string;
-    stderr: string;
-    compileOutput?: string;
-    executionTimeMs: number;
-  } | null>(null);
+  const [consoleTab, setConsoleTab] = useState<"verdict" | "history">("history");
 
-  const [isRunning, setIsRunning] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [lastSubmission, setLastSubmission] = useState<Submission | null>(null);
   const [historySubmissions, setHistorySubmissions] = useState<Submission[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
+    const handleCompilerMessage = (event: MessageEvent) => {
+      if (
+        event.origin !== ONECOMPILER_ORIGIN ||
+        event.source !== compilerFrameRef.current?.contentWindow ||
+        !event.data ||
+        typeof event.data !== "object"
+      ) {
+        return;
+      }
+
+      const message = event.data as { language?: unknown; files?: unknown };
+      const embedLanguage = typeof message.language === "string" ? message.language.toLowerCase() : "";
+      const labLanguage = LAB_LANGUAGE_BY_EMBED_LANGUAGE[embedLanguage];
+      const files = Array.isArray(message.files) ? message.files : [];
+      const primaryFile = files.find(
+        (file): file is { content: string } =>
+          Boolean(file) && typeof file === "object" && typeof (file as { content?: unknown }).content === "string"
+      );
+
+      if (labLanguage) {
+        setLanguage(labLanguage);
+      } else if (embedLanguage) {
+        setLanguage("");
+      }
+
+      if (primaryFile) {
+        setSourceCode(primaryFile.content);
+      }
+    };
+
+    window.addEventListener("message", handleCompilerMessage);
+    return () => window.removeEventListener("message", handleCompilerMessage);
+  }, []);
+
+  useEffect(() => {
     async function loadQuestion() {
       if (!questionId) return;
+      setCompilerStatus("loading");
       try {
         const res = await api.getQuestionById(questionId);
         setQuestion(res.question);
 
-        const lang = res.question.lab?.language || "C";
+        const lang: SupportedLanguage = res.question.lab?.language || "C";
         setLanguage(lang);
 
         // Load starter code or default template
@@ -62,11 +103,6 @@ export const QuestionWorkspace: React.FC = () => {
           setSourceCode(res.question.starterCode);
         } else {
           setSourceCode(getDefaultTemplate(lang));
-        }
-
-        // Load visible sample test input into custom input
-        if (res.question.testCases && res.question.testCases.length > 0) {
-          setCustomInput(res.question.testCases[0].input);
         }
 
         // Fetch submission history
@@ -96,44 +132,37 @@ export const QuestionWorkspace: React.FC = () => {
     }
   };
 
-  const handleLanguageChange = (newLang: string) => {
-    setLanguage(newLang);
-    if (!sourceCode || sourceCode === getDefaultTemplate(language)) {
-      setSourceCode(getDefaultTemplate(newLang));
-    }
-  };
-
   const handleResetCode = () => {
     if (confirm("Reset editor to starter template? Any unsaved edits will be lost.")) {
-      if (question?.starterCode) {
-        setSourceCode(question.starterCode);
-      } else {
-        setSourceCode(getDefaultTemplate(language));
-      }
+      const resetLanguage: SupportedLanguage = question?.lab?.language || "C";
+      const resetCode = question?.starterCode || getDefaultTemplate(resetLanguage);
+      setLanguage(resetLanguage);
+      setSourceCode(resetCode);
+      compilerFrameRef.current?.contentWindow?.postMessage({
+        eventType: "populateCode",
+        language: getEmbedLanguage(resetLanguage),
+        files: [{ name: getEmbedFileName(resetLanguage), content: resetCode }],
+      }, ONECOMPILER_ORIGIN);
     }
   };
 
-  const handleRunCode = async () => {
-    if (!questionId) return;
-    setIsRunning(true);
-    setConsoleTab("output");
-    try {
-      const res = await api.runCode(questionId, sourceCode, language, customInput);
-      setRunOutput(res);
-    } catch (err: any) {
-      setRunOutput({
-        status: "INTERNAL_ERROR",
-        stdout: "",
-        stderr: err.message || "Failed to execute code",
-        executionTimeMs: 0,
-      });
-    } finally {
-      setIsRunning(false);
-    }
+  const handleCompilerLoad = () => {
+    setCompilerStatus("ready");
   };
+
+  useEffect(() => {
+    if (!question || compilerStatus !== "ready") return;
+    const initialLanguage: SupportedLanguage = question.lab?.language || "C";
+    const initialCode = question.starterCode || getDefaultTemplate(initialLanguage);
+    compilerFrameRef.current?.contentWindow?.postMessage({
+      eventType: "populateCode",
+      language: getEmbedLanguage(initialLanguage),
+      files: [{ name: getEmbedFileName(initialLanguage), content: initialCode }],
+    }, ONECOMPILER_ORIGIN);
+  }, [question, compilerStatus]);
 
   const handleFormalSubmit = async () => {
-    if (!questionId) return;
+    if (!questionId || !sourceCode.trim() || !language) return;
     setIsSubmitting(true);
     setConsoleTab("verdict");
     try {
@@ -149,19 +178,9 @@ export const QuestionWorkspace: React.FC = () => {
     }
   };
 
-  const getMonacoLanguage = (lang: string) => {
-    switch (lang) {
-      case "PYTHON":
-        return "python";
-      case "C":
-      case "CPP":
-        return "cpp";
-      case "JAVA":
-        return "java";
-      default:
-        return "plaintext";
-    }
-  };
+  const canSubmitToLabNexus = Boolean(
+    sourceCode.trim() && language && Object.values(LAB_LANGUAGE_BY_EMBED_LANGUAGE).includes(language as SupportedLanguage)
+  );
 
   if (loading) {
     return (
@@ -217,39 +236,21 @@ export const QuestionWorkspace: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-4">
-          <div className="flex items-center bg-slate-900 rounded-xl p-1 border border-slate-800">
-             <select
-              value={language}
-              onChange={(e) => handleLanguageChange(e.target.value)}
-              className="bg-transparent text-slate-200 text-[10px] font-black uppercase tracking-widest px-3 py-1.5 focus:outline-none cursor-pointer"
-            >
-              <option value="C">C (GCC)</option>
-              <option value="CPP">C++ (G++)</option>
-              <option value="PYTHON">Python 3</option>
-              <option value="JAVA">Java</option>
-            </select>
-            <div className="w-[1px] h-4 bg-slate-800 mx-1" />
-            <button
-              onClick={() => setEditorTheme(editorTheme === "vs-dark" ? "light" : "vs-dark")}
-              className="p-1.5 text-slate-400 hover:text-white transition-colors"
-              title="Toggle Theme"
-            >
-              <Settings2 className="w-3.5 h-3.5" />
-            </button>
+          <div className="hidden sm:flex items-center">
             <button
               onClick={handleResetCode}
               className="p-1.5 text-slate-400 hover:text-rose-400 transition-colors"
-              title="Reset Code"
+              title="Reset embedded code to the lab starter code"
+              aria-label="Reset embedded code"
             >
               <RotateCcw className="w-3.5 h-3.5" />
             </button>
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-400" title="An isolated execution service is not configured">Code execution unavailable</span>
             <button
               onClick={handleFormalSubmit}
-              disabled={isRunning || isSubmitting}
+              disabled={!canSubmitToLabNexus || isSubmitting}
               className="flex items-center gap-2 px-6 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-indigo-500/20 disabled:opacity-50 transition-all active:scale-95"
             >
               <Send className="w-3.5 h-3.5" />
@@ -307,12 +308,7 @@ export const QuestionWorkspace: React.FC = () => {
                   <div key={tc.id || idx} className="portal-card overflow-hidden bg-white dark:bg-slate-900/80 border-slate-100 dark:border-slate-800">
                     <div className="px-4 py-2 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
                       <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Case #{idx + 1}</span>
-                      <button
-                        onClick={() => setCustomInput(tc.input)}
-                        className="text-[9px] font-black text-indigo-600 hover:text-indigo-700 uppercase tracking-widest flex items-center gap-1.5 transition-colors"
-                      >
-                        <Copy className="w-3 h-3" /> Load Input
-                      </button>
+                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Use as compiler stdin</span>
                     </div>
                     <div className="p-4 space-y-4">
                       <div className="grid grid-cols-2 gap-4">
@@ -340,34 +336,31 @@ export const QuestionWorkspace: React.FC = () => {
           </div>
         </div>
 
-        {/* Right Pane: Code Editor & Console */}
-        <div className="lg:col-span-8 flex flex-col h-full overflow-hidden">
-          <div className="flex-1 bg-white dark:bg-slate-950 relative border-b border-slate-200 dark:border-slate-800">
-            <Editor
-              height="100%"
-              language={getMonacoLanguage(language)}
-              theme={editorTheme}
-              value={sourceCode}
-              onChange={(value) => setSourceCode(value || "")}
-              options={{
-                fontSize,
-                minimap: { enabled: false },
-                scrollBeyondLastLine: false,
-                lineNumbers: "on",
-                fontFamily: "JetBrains Mono, monospace",
-                automaticLayout: true,
-                tabSize: 4,
-                padding: { top: 20 },
-                lineDecorationsWidth: 10,
-                hideCursorInOverviewRuler: true,
-                scrollbar: {
-                  vertical: 'visible',
-                  horizontal: 'visible',
-                  useShadows: false,
-                  verticalScrollbarSize: 10,
-                  horizontalScrollbarSize: 10
-                }
-              }}
+        {/* Right Pane: Code editor and LabNEXUS submissions */}
+        <div className="lg:col-span-8 flex flex-col min-h-[680px] lg:min-h-0 h-full overflow-hidden">
+          <div className="flex-1 min-h-[420px] bg-white dark:bg-slate-950 relative border-b border-slate-200 dark:border-slate-800 flex flex-col">
+            {compilerStatus === "loading" && (
+              <div className="absolute inset-x-0 top-0 z-10 flex items-center justify-center bg-white/90 dark:bg-slate-950/90 py-3 text-xs text-slate-500">
+                Loading OneCompiler…
+              </div>
+            )}
+            {compilerStatus === "error" && (
+              <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 bg-white dark:bg-slate-950 p-6 text-center">
+                <AlertTriangle className="h-8 w-8 text-amber-500" />
+                <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">OneCompiler could not be loaded.</p>
+                <p className="text-xs text-slate-500">Check your internet connection and allow onecompiler.com in the browser.</p>
+              </div>
+            )}
+            <iframe
+              key={questionId}
+              ref={compilerFrameRef}
+              title="Code editor"
+              src={`${ONECOMPILER_ORIGIN}/embed/${getEmbedLanguage(question.lab?.language || "C")}?codeChangeEvent=true&listenToEvents=true&hideNewFileOption=true&hideTitle=true&theme=dark`}
+              className="flex-1 min-h-[380px] w-full border-0"
+              onLoad={handleCompilerLoad}
+              onError={() => setCompilerStatus("error")}
+              allow="clipboard-read; clipboard-write"
+              referrerPolicy="strict-origin-when-cross-origin"
             />
           </div>
 
@@ -376,10 +369,8 @@ export const QuestionWorkspace: React.FC = () => {
             <div className="flex items-center justify-between px-6 bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
               <div className="flex gap-6">
                 {[
-                  { id: "output", icon: Terminal, label: "Terminal Output" },
-                  { id: "customInput", icon: FileCode, label: "Custom Stdin" },
-                  { id: "verdict", icon: CheckCircle2, label: "Evaluation" },
-                  { id: "history", icon: History, label: "Past Attempts" }
+                  { id: "history", icon: History, label: "Past Submissions" },
+                  { id: "verdict", icon: CheckCircle2, label: "Submission Status" },
                 ].map((tab) => (
                   <button
                     key={tab.id}
@@ -401,69 +392,9 @@ export const QuestionWorkspace: React.FC = () => {
                 ))}
               </div>
               
-              {runOutput && consoleTab === "output" && (
-                <div className="flex items-center gap-4">
-                  <Badge status={runOutput.status} size="sm" />
-                  <div className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase">
-                    <Clock className="w-3 h-3" />
-                    {runOutput.executionTimeMs}ms
-                  </div>
-                </div>
-              )}
             </div>
 
             <div className="flex-1 p-6 overflow-y-auto bg-white dark:bg-slate-950 font-mono text-xs custom-scrollbar">
-              {consoleTab === "output" && (
-                <div className="space-y-4">
-                  {isRunning ? (
-                    <div className="flex items-center gap-3 text-slate-400 animate-pulse font-bold uppercase tracking-widest text-[10px]">
-                      <Cpu className="w-4 h-4 animate-spin" />
-                      Executing session in secure sandbox...
-                    </div>
-                  ) : runOutput ? (
-                    <div className="space-y-4">
-                      {runOutput.compileOutput && (
-                        <div className="portal-card border-rose-200 dark:border-rose-900/50 bg-rose-50/50 dark:bg-rose-950/20 overflow-hidden">
-                          <div className="px-4 py-1.5 bg-rose-600 text-white text-[9px] font-black uppercase tracking-widest">Compilation Failure</div>
-                          <pre className="p-4 text-rose-600 dark:text-rose-400 whitespace-pre-wrap leading-relaxed">{runOutput.compileOutput}</pre>
-                        </div>
-                      )}
-                      {runOutput.stdout && (
-                        <div className="portal-card border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 overflow-hidden">
-                          <div className="px-4 py-1.5 bg-slate-800 text-white text-[9px] font-black uppercase tracking-widest">Stdout</div>
-                          <pre className="p-4 text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">{runOutput.stdout}</pre>
-                        </div>
-                      )}
-                      {runOutput.stderr && !runOutput.compileOutput && (
-                        <div className="portal-card border-rose-200 dark:border-rose-900/50 bg-rose-50/50 dark:bg-rose-950/20 overflow-hidden">
-                          <div className="px-4 py-1.5 bg-rose-600 text-white text-[9px] font-black uppercase tracking-widest">Runtime Error</div>
-                          <pre className="p-4 text-rose-600 dark:text-rose-400 whitespace-pre-wrap leading-relaxed">{runOutput.stderr}</pre>
-                        </div>
-                      )}
-                      {!runOutput.stdout && !runOutput.stderr && !runOutput.compileOutput && (
-                        <div className="text-slate-400 italic text-[11px] font-medium text-center py-8">Process finished with exit code 0 (No output generated)</div>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-center justify-center py-12 text-slate-300 dark:text-slate-700">
-                      <Terminal className="w-12 h-12 mb-4 opacity-20" />
-                      <p className="text-[10px] font-black uppercase tracking-widest">Code execution is unavailable</p>
-                      <p className="text-[10px] text-center max-w-xs">You can save a submission now. Evaluation stays pending until an isolated runner is configured.</p>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {consoleTab === "customInput" && (
-                <div className="h-full">
-                  <textarea
-                    value={customInput}
-                    onChange={(e) => setCustomInput(e.target.value)}
-                    placeholder="Provide standard input (stdin) for the practice session..."
-                    className="w-full h-full bg-slate-50 dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-200 font-mono text-xs focus:outline-none focus:ring-2 focus:ring-indigo-600/20 transition-all resize-none"
-                  />
-                </div>
-              )}
 
               {consoleTab === "verdict" && (
                 <div className="space-y-6">
@@ -525,7 +456,7 @@ export const QuestionWorkspace: React.FC = () => {
               {consoleTab === "history" && (
                 <div className="space-y-3">
                   {historySubmissions.length === 0 ? (
-                    <div className="text-slate-400 italic text-[11px] font-medium text-center py-12">No previous attempts recorded for this question.</div>
+                    <div className="text-slate-400 italic text-[11px] font-medium text-center py-12">No formal submissions recorded for this question.</div>
                   ) : (
                     historySubmissions.map((sub) => (
                       <div

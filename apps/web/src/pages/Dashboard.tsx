@@ -508,7 +508,7 @@ const StudentDashboard: React.FC = () => {
       </section>
 
       <section id="labs" className="space-y-4 scroll-mt-24">
-        <div><h2 className="text-xl font-bold">My labs</h2><p className="text-sm text-slate-500 mt-1">Open a lab to review questions and course material.</p></div>
+        <div><h2 className="text-xl font-bold">MY LABS</h2><p className="text-sm text-slate-500 mt-1">Open a lab to review questions and course material.</p></div>
         {labs.length === 0 ? (
           <div className="portal-card p-8 text-center"><p className="text-slate-500">You are not enrolled in any labs yet.</p><p className="text-sm text-slate-400 mt-2">Ask your instructor for a lab enrollment key.</p></div>
         ) : (

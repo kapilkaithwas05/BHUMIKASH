@@ -122,6 +122,10 @@ router.post("/login", async (req: Request, res: Response) => {
       });
     }
 
+    if (!user.isActive) {
+      return res.status(403).json({ message: "This account is inactive" });
+    }
+
     const passwordMatches = await bcrypt.compare(
       password,
       user.passwordHash

@@ -7,7 +7,14 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
-    "seed": "tsx scripts/seed.ts"
+    "seed": "tsx scripts/seed.ts",
+    "seed:demo-accounts": "tsx scripts/seed-demo-accounts.ts",
+    "db:validate": "prisma validate --config prisma7.config.ts",
+    "db:generate": "prisma generate --config prisma7.config.ts",
+    "db:audit:academic": "node -r dotenv/config scripts/academic-audit-readonly.cjs",
+    "db:migrate": "prisma migrate dev --config prisma7.config.ts",
+    "db:deploy": "prisma migrate deploy --config prisma7.config.ts",
+    "studio": "prisma studio --config prisma7.config.ts"
   },
   "keywords": [],
   "author": "",

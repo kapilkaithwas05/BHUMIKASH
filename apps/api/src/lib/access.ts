@@ -6,24 +6,34 @@ export interface AccessActor {
   role: UserRole;
 }
 
-/** Find a lab only when the actor may manage it. VC is institution-wide, faculty own labs,
- * and HODs are limited to their department (including faculty-created labs in that department).
+/** Find a lab only when the actor may manage it. VC is institution-wide, faculty may manage
+ * labs they created or were assigned to teach, and HODs are department-scoped.
  */
 export async function findManageableLab(labId: string, actor: AccessActor) {
   let scope: Record<string, unknown> = {};
 
   if (actor.role === "FACULTY") {
-    scope = { createdById: actor.userId };
+    scope = {
+      OR: [
+        { createdById: actor.userId },
+        { facultyAssignments: { some: { faculty: { userId: actor.userId } } } },
+      ],
+    };
   } else if (actor.role === "HOD") {
     const hod = await prisma.user.findUnique({
       where: { id: actor.userId },
-      select: { departmentId: true },
+      select: {
+        departmentId: true,
+        facultyProfile: { select: { departmentId: true } },
+      },
     });
-    scope = hod?.departmentId
+    const departmentId = hod?.facultyProfile?.departmentId ?? hod?.departmentId;
+    scope = departmentId
       ? {
           OR: [
-            { departmentId: hod.departmentId },
-            { createdBy: { departmentId: hod.departmentId } },
+            { departmentId },
+            { createdBy: { departmentId } },
+            { createdBy: { facultyProfile: { departmentId } } },
           ],
         }
       : { createdById: actor.userId };
