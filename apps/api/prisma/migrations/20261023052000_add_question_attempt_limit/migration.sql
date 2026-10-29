@@ -1,2 +1,2 @@
 -- AlterTable
-ALTER TABLE "Question" ADD COLUMN "attemptsAllowed" INTEGER;
+ALTER TABLE "Question" ADD COLUMN IF NOT EXISTS "attemptsAllowed" INTEGER;
